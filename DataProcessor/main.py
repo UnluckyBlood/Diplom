@@ -239,15 +239,16 @@ class ArduinoDataProcessor:
     
     def process_data(self):
         """Основной цикл обработки данных"""
-        last_5min_calc = datetime.now()
+        last_ai_analysis = datetime.now()  # Для частого AI
+        last_5min_calc = datetime.now()    # Для 5-минутных средних
         last_hourly_reset = datetime.now()
         
         print("=" * 60)
-        print("🚀 ARDUINO DATA PROCESSOR v2.0")
+        print("🚀 ARDUINO DATA PROCESSOR v3.0")
         print("=" * 60)
         print(f"📡 Порт: {SERIAL_PORT}")
         print(f"📊 Буфер: {BUFFER_SIZE} записей")
-        print(f"🤖 AI анализ каждые 5 минут")
+        print(f"🤖 AI анализ каждую минуту")
         print("=" * 60)
         
         try:
@@ -277,9 +278,53 @@ class ArduinoDataProcessor:
                     except Exception as e:
                         print(f"❌ Ошибка чтения/отправки: {e}")
                 
-                # 5-минутный анализ
                 current_time = datetime.now()
-                if (current_time - last_5min_calc).seconds >= 300:  # 5 минут
+                
+                # ✅ ЧАСТЫЙ AI АНАЛИЗ (каждую минуту)
+                if (current_time - last_ai_analysis).seconds >= 60:
+                    print("\n" + "=" * 40)
+                    print("🤖 БЫСТРЫЙ AI АНАЛИЗ...")
+                    print("=" * 40)
+                    
+                    if len(self.data_buffer) > 0:
+                        # Берем последние данные
+                        latest_data = self.data_buffer[-1] if self.data_buffer else None
+                        if latest_data and 'temperature' in latest_data:
+                            # Быстрый AI анализ
+                            quick_result = self.get_ai_analysis({
+                                'avg_temperature': latest_data.get('temperature', 0),
+                                'avg_humidity': latest_data.get('humidity', 0),
+                                'total_hits': latest_data.get('hit_count', 0)
+                            })
+                            
+                            # Отправляем быструю рекомендацию
+                            quick_message = {
+                                "timestamp": datetime.now().isoformat(),
+                                "message": f"🔄 Быстрая проверка: {latest_data.get('temperature', 0):.1f}°C, "
+                                        f"{latest_data.get('humidity', 0):.1f}%, "
+                                        f"{latest_data.get('hit_count', 0)} ударов | "
+                                        f"{quick_result['recommendations'][0] if quick_result['recommendations'] else 'OK'}",
+                                "type": "info",
+                                "parameters": {
+                                    "temperature": latest_data.get('temperature', 0),
+                                    "humidity": latest_data.get('humidity', 0),
+                                    "hits": latest_data.get('hit_count', 0),
+                                    "quick_check": True
+                                }
+                            }
+                            
+                            try:
+                                response = requests.post(AI_CHAT_URL, json=quick_message, timeout=3)
+                                if response.status_code == 200:
+                                    print(f"✅ Быстрый AI анализ отправлен")
+                            except:
+                                pass
+                    
+                    last_ai_analysis = current_time
+                    print("=" * 40 + "\n")
+                
+                # 5-минутный анализ (расширенный)
+                if (current_time - last_5min_calc).seconds >= 60:  # 1 минута
                     print("\n" + "=" * 60)
                     print("📊 ВЫПОЛНЕНИЕ 5-МИНУТНОГО АНАЛИЗА...")
                     print("=" * 60)
@@ -303,8 +348,10 @@ class ArduinoDataProcessor:
                             'avg_temperature': avg_data['avg_temperature'],
                             'avg_humidity': avg_data['avg_humidity'],
                             'total_hits': avg_data['total_hits'],
-                            'ai_recommendations': ai_result['recommendations'],
-                            'ai_confidence': ai_result['confidence']
+                            'ai_recommendations': ai_result['recommendations'][:3],  # Только 3 главные
+                            'ai_confidence': ai_result['confidence'],
+                            'failure_risk': ai_result.get('failure_risk', 0),
+                            'risk_level': ai_result.get('risk_analysis', {}).get('risk_level', 'unknown')
                         }
                         
                         self.send_to_web_server(combined_data)
@@ -317,6 +364,7 @@ class ArduinoDataProcessor:
                         for i, rec in enumerate(ai_result['recommendations'][:3], 1):
                             print(f"  {i}. {rec}")
                         print(f"  Уверенность: {ai_result['confidence']:.1%}")
+                        print(f"  Риск отказа: {ai_result.get('failure_risk', 0):.1%}")
                     
                     last_5min_calc = current_time
                     print("=" * 60 + "\n")
@@ -327,7 +375,7 @@ class ArduinoDataProcessor:
                     last_hourly_reset = current_time
                     print("🔄 Сброс счетчика ударов (каждый час)")
                 
-                time.sleep(0.1)  # Небольшая пауза
+                time.sleep(0.05)  # Уменьшили паузу для более быстрой реакции
                 
         except KeyboardInterrupt:
             print("\n\n🛑 Завершение работы...")

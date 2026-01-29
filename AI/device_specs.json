@@ -1,0 +1,68 @@
+{
+    "device_type": "Industrial_Vibration_Sensor_V2",
+    "manufacturer": "Arduino Industrial",
+    "model": "AIS-2024",
+    "serial_number": "ARD-IND-001",
+    
+    "max_temperature": 40.0,
+    "min_temperature": -20.0,
+    "max_humidity": 90.0,
+    "min_humidity": 5.0,
+    
+    "operating_range": {
+        "temperature": [18.0, 28.0],
+        "humidity": [30.0, 70.0],
+        "vibration_frequency": [0, 10]
+    },
+    
+    "vibration_threshold": 12,
+    "shock_resistance": "10G",
+    "ip_rating": "IP67",
+    
+    "accuracy": {
+        "temperature": 0.3,
+        "humidity": 1.5,
+        "vibration": 0.1
+    },
+    
+    "power_requirements": {
+        "voltage": "5V DC",
+        "current": "20mA",
+        "power_consumption": 0.1
+    },
+    
+    "environmental": {
+        "operating_temperature": [-10, 40],
+        "storage_temperature": [-20, 60],
+        "altitude_limit": 2000
+    },
+    
+    "maintenance": {
+        "interval_days": 45,
+        "calibration_interval": 180,
+        "expected_lifetime_hours": 15000,
+        "mtbf_hours": 50000
+    },
+    
+    "communication": {
+        "interface": "UART/Serial",
+        "baud_rate": 9600,
+        "data_format": "ASCII",
+        "sampling_rate_hz": 0.5
+    },
+    
+    "physical": {
+        "dimensions_mm": [45, 25, 15],
+        "weight_grams": 25,
+        "enclosure_material": "ABS Plastic",
+        "connector_type": "JST-PH"
+    },
+    
+    "certifications": [
+        "CE",
+        "RoHS",
+        "IP67"
+    ],
+    
+    "notes": "Industrial grade sensor for vibration monitoring in harsh environments. Requires periodic calibration."
+}
