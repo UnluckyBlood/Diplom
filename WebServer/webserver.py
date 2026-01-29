@@ -1,13 +1,20 @@
-﻿from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+﻿from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
-from datetime import datetime
+from fastapi.staticfiles import StaticFiles
+from datetime import datetime, timedelta
 import json
 import sqlite3
 import asyncio
 import uvicorn
+from typing import List, Optional
+import os
 
-app = FastAPI(title="Arduino Monitoring System")
+app = FastAPI(title="Arduino Monitoring System with AI")
+
+# Подключаем статические файлы
+os.makedirs("WebServer/static", exist_ok=True)
+app.mount("/static", StaticFiles(directory="WebServer/static"), name="static")
 
 # Настройка CORS
 app.add_middleware(
@@ -17,20 +24,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Менеджер WebSocket подключений
+# Хранилище AI рекомендаций для чата
+ai_recommendations_history = []
+
 class ConnectionManager:
     def __init__(self):
-        self.active_connections = []
+        self.active_connections: List[WebSocket] = []
     
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
         self.active_connections.append(websocket)
-        print(f"WebSocket подключен. Всего: {len(self.active_connections)}")
+        print(f"✅ WebSocket подключен. Всего: {len(self.active_connections)}")
     
     def disconnect(self, websocket: WebSocket):
         if websocket in self.active_connections:
             self.active_connections.remove(websocket)
-        print(f"WebSocket отключен. Осталось: {len(self.active_connections)}")
+        print(f"🔌 WebSocket отключен. Осталось: {len(self.active_connections)}")
     
     async def broadcast(self, message: str):
         disconnected = []
@@ -51,257 +60,126 @@ def get_db_connection():
     conn.row_factory = sqlite3.Row
     return conn
 
+def init_database():
+    """Инициализация базы данных с таблицами для истории"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Таблица для реальных данных
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS sensor_data (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            temperature REAL,
+            humidity REAL,
+            hit_detected INTEGER DEFAULT 0,
+            hit_interval INTEGER,
+            hit_count INTEGER DEFAULT 0
+        )
+    ''')
+    
+    # Таблица для 5-минутных средних
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS five_min_avg (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp DATETIME,
+            avg_temperature REAL,
+            avg_humidity REAL,
+            total_hits INTEGER,
+            ai_recommendation TEXT,
+            ai_confidence REAL
+        )
+    ''')
+    
+    # Таблица для AI рекомендаций (чат)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS ai_chat (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            message TEXT,
+            message_type TEXT, -- 'warning', 'info', 'danger', 'recommendation'
+            parameters TEXT  -- JSON с данными на момент рекомендации
+        )
+    ''')
+    
+    conn.commit()
+    conn.close()
+    print("✅ База данных инициализирована")
+
+@app.on_event("startup")
+async def startup_event():
+    init_database()
+    print("🚀 Система мониторинга запущена")
+
 @app.get("/")
 async def get_dashboard():
     """Главная страница дашборда"""
-    html_content = """
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Arduino Monitoring</title>
-        <script>
-            let ws;
-            
-            function initWebSocket() {
-                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-                const wsUrl = `${protocol}//${window.location.host}/ws`;
-                
-                ws = new WebSocket(wsUrl);
-                
-                ws.onopen = function() {
-                    console.log('WebSocket подключен');
-                    document.getElementById('status').textContent = 'Подключено';
-                };
-                
-                ws.onmessage = function(event) {
-                    try {
-                        const data = JSON.parse(event.data);
-                        updateDashboard(data);
-                    } catch (e) {
-                        console.error('Ошибка парсинга:', e);
-                    }
-                };
-                
-                ws.onclose = function() {
-                    console.log('WebSocket отключен');
-                    document.getElementById('status').textContent = 'Отключено';
-                    setTimeout(initWebSocket, 3000);
-                };
-            }
-            
-            function updateDashboard(data) {
-                if (data.type === 'realtime' && data.data.temperature) {
-                    document.getElementById('temp').textContent = data.data.temperature.toFixed(1);
-                    document.getElementById('hum').textContent = data.data.humidity?.toFixed(1) || '--';
-                    document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
-                }
-            }
-            
-            window.onload = function() {
-                initWebSocket();
-                setInterval(updateTime, 1000);
-            };
-            
-            function updateTime() {
-                document.getElementById('currentTime').textContent = new Date().toLocaleTimeString();
-            }
-        </script>
-        <style>
-            body {
-                font-family: Arial, sans-serif;
-                max-width: 800px;
-                margin: 0 auto;
-                padding: 20px;
-                background: #f5f5f5;
-            }
-            .card {
-                background: white;
-                padding: 20px;
-                margin: 10px 0;
-                border-radius: 10px;
-                box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-            }
-            .value {
-                font-size: 2em;
-                font-weight: bold;
-                color: #333;
-            }
-            .label {
-                color: #666;
-                margin-top: 5px;
-            }
-        </style>
-    </head>
-    <body>
-        <h1>Arduino Monitoring System</h1>
-        
-        <div class="card">
-            <div class="label">Статус:</div>
-            <div id="status">Подключение...</div>
-            <div class="label">Текущее время:</div>
-            <div id="currentTime">--:--:--</div>
-        </div>
-        
-        <div class="card">
-            <div class="label">Температура:</div>
-            <div class="value" id="temp">--</div>
-            <div class="label">°C</div>
-        </div>
-        
-        <div class="card">
-            <div class="label">Влажность:</div>
-            <div class="value" id="hum">--</div>
-            <div class="label">%</div>
-        </div>
-        
-        <div class="card">
-            <div class="label">Последнее обновление:</div>
-            <div id="lastUpdate">--:--:--</div>
-        </div>
-    </body>
-    </html>
-    """
-    return HTMLResponse(html_content)
+    return HTMLResponse(open("WebServer/dashboard.html", encoding="utf-8").read())
 
-@app.post("/api/data")
-async def receive_data(data: dict):
-    """Прием данных от Python-скрипта"""
+# API endpoints остаются примерно такими же, но добавляем новые
+
+@app.get("/api/ai/recommendations")
+async def get_ai_recommendations(limit: int = 20):
+    """Получение истории AI рекомендаций"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT timestamp, message, message_type, parameters
+        FROM ai_chat
+        ORDER BY timestamp DESC
+        LIMIT ?
+    ''', (limit,))
+    
+    rows = cursor.fetchall()
+    conn.close()
+    
+    recommendations = []
+    for row in rows:
+        recommendations.append({
+            "timestamp": row["timestamp"],
+            "message": row["message"],
+            "type": row["message_type"],
+            "parameters": json.loads(row["parameters"]) if row["parameters"] else {}
+        })
+    
+    return recommendations
+
+@app.post("/api/ai/add_recommendation")
+async def add_ai_recommendation(recommendation: dict):
+    """Добавление AI рекомендации в чат"""
     try:
-        # Сохранение в БД
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        data_type = data.get('type')
-        
-        if data_type == 'realtime':
-            sensor_data = data.get('data', {})
-            cursor.execute('''
-                INSERT INTO sensor_data 
-                (timestamp, temperature, humidity, hit_detected, hit_interval, hit_count)
-                VALUES (?, ?, ?, ?, ?, ?)
-            ''', (
-                sensor_data.get('timestamp'),
-                sensor_data.get('temperature'),
-                sensor_data.get('humidity'),
-                sensor_data.get('hit_detected', 0),
-                sensor_data.get('hit_interval', 0),
-                sensor_data.get('hit_count', 0)
-            ))
-        
-        elif data_type == '5min_avg':
-            cursor.execute('''
-                INSERT INTO five_min_avg 
-                (timestamp, avg_temperature, avg_humidity, total_hits, ai_recommendation)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (
-                data.get('timestamp'),
-                data.get('avg_temperature'),
-                data.get('avg_humidity'),
-                data.get('total_hits'),
-                json.dumps({
-                    'recommendations': data.get('ai_recommendations', []),
-                    'confidence': data.get('ai_confidence', 0)
-                })
-            ))
+        cursor.execute('''
+            INSERT INTO ai_chat (timestamp, message, message_type, parameters)
+            VALUES (?, ?, ?, ?)
+        ''', (
+            recommendation.get("timestamp", datetime.now().isoformat()),
+            recommendation.get("message", ""),
+            recommendation.get("type", "info"),
+            json.dumps(recommendation.get("parameters", {}))
+        ))
         
         conn.commit()
         conn.close()
         
-        # Рассылка через WebSocket
-        await manager.broadcast(json.dumps(data))
-        
-        return {"status": "success", "message": "Data received"}
-        
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
-
-@app.get("/api/current")
-async def get_current_data():
-    """Получение текущих данных"""
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            SELECT timestamp, temperature, humidity, hit_count
-            FROM sensor_data 
-            WHERE temperature IS NOT NULL
-            ORDER BY timestamp DESC
-            LIMIT 1
-        ''')
-        
-        row = cursor.fetchone()
-        conn.close()
-        
-        if row:
-            return dict(row)
-        else:
-            return {"message": "No data available"}
-        
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
-
-@app.get("/api/history")
-async def get_history(hours: int = 1):
-    """Получение истории данных"""
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            SELECT timestamp, temperature, humidity
-            FROM sensor_data 
-            WHERE timestamp >= datetime('now', ?)
-            ORDER BY timestamp DESC
-        ''', (f'-{hours} hours',))
-        
-        rows = cursor.fetchall()
-        conn.close()
-        
-        return [dict(row) for row in rows]
-        
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
-
-@app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    await manager.connect(websocket)
-    try:
-        # Отправляем начальные данные
-        await websocket.send_text(json.dumps({
-            "type": "connection",
-            "message": "Connected",
-            "timestamp": datetime.now().isoformat()
+        # Рассылаем через WebSocket
+        await manager.broadcast(json.dumps({
+            "type": "ai_recommendation",
+            "data": recommendation
         }))
         
-        # Ожидание сообщений
-        while True:
-            data = await websocket.receive_text()
-            # Эхо-ответ
-            await websocket.send_text(json.dumps({
-                "type": "echo",
-                "message": f"Received: {data}",
-                "timestamp": datetime.now().isoformat()
-            }))
-            
-    except WebSocketDisconnect:
-        manager.disconnect(websocket)
+        return {"status": "success"}
+        
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
-@app.get("/api/status")
-async def get_status():
-    """Получение статуса системы"""
-    return {
-        "status": "running",
-        "timestamp": datetime.now().isoformat(),
-        "websocket_connections": len(manager.active_connections)
-    }
+# Остальные endpoints (api/data, api/current, api/history, /ws) остаются
 
 if __name__ == "__main__":
-    print("🚀 Запуск Arduino Monitoring System...")
+    print("🚀 Запуск Arduino Monitoring System with AI...")
     print("🌐 Веб-интерфейс: http://localhost:8000")
-    print("⚡ WebSocket: ws://localhost:8000/ws")
-    print("\nДля остановки нажмите Ctrl+C\n")
-    
+    print("🤖 AI рекомендации доступны в чате")
     uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -1,131 +1,221 @@
 ﻿import json
 from datetime import datetime
+import numpy as np
+from typing import List, Dict, Tuple
 
-class SimpleRuleBasedAI:
+class AdvancedRuleBasedAI:
     def __init__(self):
         self.rules = self.load_rules()
-    
+        self.device_specs = self.load_device_specs()
+        self.history = []
+        
     def load_rules(self):
         """Загрузка правил для принятия решений"""
         return {
             'temperature': {
-                'normal': (18, 25),
-                'warning': (25, 30),
-                'danger': (30, 50)
+                'optimal': (20, 24),
+                'normal': (18, 26),
+                'warning': (26, 30),
+                'danger': (30, 100)
             },
             'humidity': {
+                'optimal': (40, 60),
                 'normal': (30, 70),
-                'warning': (70, 80),
-                'danger': (80, 100)
+                'warning': (70, 85),
+                'danger': (85, 100)
             },
             'hits': {
-                'normal': (0, 5),
+                'optimal': (0, 1),
+                'normal': (1, 5),
                 'warning': (5, 15),
-                'danger': (15, 100)
+                'danger': (15, 1000)
             }
         }
     
-    def evaluate_parameter(self, value, ranges):
-        """Оценка одного параметра"""
-        for level, (min_val, max_val) in ranges.items():
-            if min_val <= value < max_val:
-                return level
-        return 'unknown'
+    def load_device_specs(self):
+        """Загрузка спецификации устройства"""
+        # Здесь можно загрузить спецификации из файла
+        return {
+            'max_temperature': 35,      # Максимальная рабочая температура
+            'min_temperature': 10,      # Минимальная рабочая температура
+            'max_humidity': 80,         # Максимальная влажность
+            'vibration_threshold': 10,  # Порог вибраций
+            'device_type': 'industrial_sensor',  # Тип устройства
+            'maintenance_interval': 30  # Дней между обслуживанием
+        }
     
-    def calculate_confidence(self, levels):
-        """Расчет уверенности на основе уровней"""
-        level_weights = {
-            'normal': 0.1,
-            'warning': 0.3,
-            'danger': 0.9
+    def evaluate_trend(self, values: List[float]) -> str:
+        """Оценка тренда данных"""
+        if len(values) < 3:
+            return "insufficient_data"
+        
+        # Простой расчет тренда
+        x = np.arange(len(values))
+        coeffs = np.polyfit(x, values, 1)
+        slope = coeffs[0]
+        
+        if slope > 0.1:
+            return "rising"
+        elif slope < -0.1:
+            return "falling"
+        else:
+            return "stable"
+    
+    def analyze_correlation(self, temp: float, hum: float, hits: int) -> Dict:
+        """Анализ корреляции параметров"""
+        analysis = {
+            'temperature_humidity': 'normal',
+            'temperature_vibration': 'normal',
+            'combined_risk': 'low'
         }
         
-        total_weight = sum(level_weights.get(level, 0) for level in levels)
-        confidence = min(0.99, total_weight / len(levels))
+        # Корреляция температура-влажность
+        if temp > 25 and hum > 70:
+            analysis['temperature_humidity'] = 'high_risk'
+            analysis['combined_risk'] = 'high'
+        elif temp > 28 or hum > 75:
+            analysis['temperature_humidity'] = 'medium_risk'
+            analysis['combined_risk'] = 'medium'
         
-        # Увеличиваем уверенность если все параметры в одном состоянии
-        if all(level == levels[0] for level in levels):
-            confidence = min(0.99, confidence + 0.2)
+        # Корреляция температура-вибрации
+        if temp > 27 and hits > 5:
+            analysis['temperature_vibration'] = 'high_risk'
+            analysis['combined_risk'] = 'high'
         
-        return confidence
+        return analysis
     
-    def get_recommendation(self, temperature, humidity, hits):
-        """Получение рекомендации на основе данных"""
+    def generate_device_specific_recommendations(self, temp: float, hum: float, hits: int) -> List[str]:
+        """Генерация рекомендаций на основе спецификации устройства"""
+        recommendations = []
+        
+        # Проверка против спецификации устройства
+        if temp > self.device_specs['max_temperature']:
+            recommendations.append(f"🚨 ПРЕВЫШЕНИЕ МАКС. ТЕМПЕРАТУРЫ! {temp:.1f}°C > {self.device_specs['max_temperature']}°C")
+            recommendations.append("НЕМЕДЛЕННО снизить нагрузку или охладить устройство")
+        
+        if hum > self.device_specs['max_humidity']:
+            recommendations.append(f"💦 ПРЕВЫШЕНИЕ МАКС. ВЛАЖНОСТИ! {hum:.1f}% > {self.device_specs['max_humidity']}%")
+            recommendations.append("Рекомендуется включить осушение воздуха")
+        
+        if hits > self.device_specs['vibration_threshold']:
+            recommendations.append(f"⚡ ВИБРАЦИИ ВЫШЕ ПОРОГА! {hits} > {self.device_specs['vibration_threshold']}")
+            recommendations.append("Проверьте крепление и балансировку устройства")
+        
+        # Оптимизационные рекомендации
+        if self.device_specs['device_type'] == 'industrial_sensor':
+            if 20 <= temp <= 24 and 40 <= hum <= 60:
+                recommendations.append("✅ Оптимальные условия для промышленного датчика")
+            elif temp < 20:
+                recommendations.append("❄️ Температура ниже оптимальной для точных измерений")
+        
+        return recommendations
+    
+    def predict_failure_risk(self, temp: float, hum: float, hits: int) -> float:
+        """Прогноз риска отказа оборудования"""
+        risk_score = 0.0
+        
+        # Веса параметров
+        weights = {
+            'temperature': 0.4,
+            'humidity': 0.3,
+            'vibration': 0.3
+        }
+        
+        # Расчет риска по температуре
+        temp_risk = max(0, (temp - 25) / 10)  # 0-1, где 25°C = 0, 35°C = 1
+        risk_score += temp_risk * weights['temperature']
+        
+        # Расчет риска по влажности
+        hum_risk = max(0, (hum - 65) / 20)    # 0-1, где 65% = 0, 85% = 1
+        risk_score += hum_risk * weights['humidity']
+        
+        # Расчет риска по вибрациям
+        vib_risk = min(1, hits / 20)          # 0-1, где 20 ударов = 1
+        risk_score += vib_risk * weights['vibration']
+        
+        # Корректировка на основе истории
+        if len(self.history) > 10:
+            recent_temps = [h['temperature'] for h in self.history[-5:]]
+            trend = self.evaluate_trend(recent_temps)
+            if trend == 'rising':
+                risk_score *= 1.2
+        
+        return min(1.0, risk_score)
+    
+    def get_recommendation(self, temperature: float, humidity: float, hits: int) -> Dict:
+        """Получение комплексной рекомендации"""
         try:
-            # Оценка каждого параметра
-            temp_level = self.evaluate_parameter(temperature, self.rules['temperature'])
-            hum_level = self.evaluate_parameter(humidity, self.rules['humidity'])
-            hits_level = self.evaluate_parameter(hits, self.rules['hits'])
+            # Сохраняем в историю
+            self.history.append({
+                'timestamp': datetime.now(),
+                'temperature': temperature,
+                'humidity': humidity,
+                'hits': hits
+            })
             
-            levels = [temp_level, hum_level, hits_level]
+            # Ограничиваем историю
+            if len(self.history) > 100:
+                self.history = self.history[-100:]
             
-            # Определение общего уровня опасности
-            if 'danger' in levels:
+            # Анализ параметров
+            correlation = self.analyze_correlation(temperature, humidity, hits)
+            device_recs = self.generate_device_specific_recommendations(temperature, humidity, hits)
+            failure_risk = self.predict_failure_risk(temperature, humidity, hits)
+            
+            # Определение уровня опасности
+            if failure_risk > 0.7 or any('🚨' in rec for rec in device_recs):
                 overall_level = 'danger'
-            elif 'warning' in levels:
+                confidence = max(0.8, failure_risk)
+            elif failure_risk > 0.4 or len(device_recs) > 2:
                 overall_level = 'warning'
+                confidence = failure_risk
             else:
                 overall_level = 'normal'
+                confidence = 1.0 - failure_risk
             
-            # Расчет уверенности
-            confidence = self.calculate_confidence(levels)
+            # Формирование полного списка рекомендаций
+            all_recommendations = []
             
-            # Генерация рекомендаций
-            recommendations = []
-            
+            # Общие рекомендации
             if overall_level == 'normal':
-                recommendations.append("✅ Все параметры в пределах нормы")
-                recommendations.append("📊 Система работает стабильно")
-                
+                all_recommendations.append("✅ Система работает в штатном режиме")
+                all_recommendations.append(f"📊 Условия: {temperature:.1f}°C, {humidity:.1f}%")
+            
             elif overall_level == 'warning':
-                recommendations.append("⚠️ Внимание! Некоторые параметры близки к критическим")
-                
-                if temp_level == 'warning':
-                    recommendations.append(f"🌡️ Температура повышена: {temperature:.1f}°C")
-                if hum_level == 'warning':
-                    recommendations.append(f"💧 Влажность высокая: {humidity:.1f}%")
-                if hits_level == 'warning':
-                    recommendations.append(f"🔨 Обнаружены вибрации: {hits} ударов")
-                    
-                recommendations.append("Рекомендуется провести проверку оборудования")
-                
+                all_recommendations.append("⚠️ Требуется внимание к параметрам системы")
+                if correlation['combined_risk'] in ['medium', 'high']:
+                    all_recommendations.append("🔗 Обнаружена корреляция рисков")
+            
             elif overall_level == 'danger':
-                recommendations.append("🚨 КРИТИЧЕСКОЕ СОСТОЯНИЕ!")
-                
-                if temp_level == 'danger':
-                    recommendations.append(f"🔥 ОПАСНО: Температура критически высокая! {temperature:.1f}°C")
-                if hum_level == 'danger':
-                    recommendations.append(f"💦 ОПАСНО: Влажность критически высокая! {humidity:.1f}%")
-                if hits_level == 'danger':
-                    recommendations.append(f"⚡ ОПАСНО: Сильные вибрации! {hits} ударов")
-                    
-                recommendations.append("НЕМЕДЛЕННО проверьте оборудование!")
-                confidence = max(confidence, 0.95)
+                all_recommendations.append("🚨 КРИТИЧЕСКОЕ СОСТОЯНИЕ!")
+                all_recommendations.append(f"📈 Риск отказа: {failure_risk:.0%}")
             
-            # Дополнительные рекомендации
-            if temperature < 18:
-                recommendations.append("❄️ Низкая температура может влиять на работу оборудования")
+            # Добавляем специфические рекомендации
+            all_recommendations.extend(device_recs)
             
-            if humidity < 30:
-                recommendations.append("🏜️ Низкая влажность - риск статического электричества")
-            
+            # Рекомендации по обслуживанию
             if hits > 0:
-                recommendations.append(f"📈 Зафиксировано ударов/вибраций: {hits}")
+                all_recommendations.append(f"🔧 Зафиксировано вибраций: {hits}")
+                if hits > 10:
+                    all_recommendations.append("Рекомендуется проверить крепление устройства")
             
-            # Карта уровней для числового представления
+            # Прогноз
+            if failure_risk > 0.5:
+                all_recommendations.append(f"📉 Прогнозируемый риск отказа: {failure_risk:.0%}")
+                if temperature > 28:
+                    all_recommendations.append("Снизьте температуру для уменьшения риска")
+            
+            # Маппинг уровня на числовой класс
             level_map = {'normal': 0, 'warning': 1, 'danger': 2}
             
             return {
-                'recommendations': recommendations,
+                'recommendations': all_recommendations,
                 'confidence': float(confidence),
                 'prediction_class': level_map[overall_level],
+                'failure_risk': float(failure_risk),
+                'correlation_analysis': correlation,
                 'timestamp': datetime.now().isoformat(),
-                'levels': {
-                    'temperature': temp_level,
-                    'humidity': hum_level,
-                    'hits': hits_level
-                },
-                'values': {
+                'parameters': {
                     'temperature': temperature,
                     'humidity': humidity,
                     'hits': hits
@@ -133,33 +223,38 @@ class SimpleRuleBasedAI:
             }
             
         except Exception as e:
-            print(f"Ошибка AI: {e}")
+            print(f"❌ Ошибка AI: {e}")
             return {
-                'recommendations': ["ИИ временно недоступен"],
+                'recommendations': ["ИИ временно недоступен", f"Ошибка: {str(e)[:50]}"],
                 'confidence': 0.0,
-                'error': str(e),
-                'prediction_class': -1
+                'prediction_class': -1,
+                'failure_risk': 0.0,
+                'error': str(e)
             }
 
 # Глобальный экземпляр
-ai_instance = SimpleRuleBasedAI()
+ai_instance = AdvancedRuleBasedAI()
 
-def get_recommendation(temperature, humidity, hits):
+def get_recommendation(temperature: float, humidity: float, hits: int) -> Dict:
+    """Публичная функция для получения рекомендаций"""
     return ai_instance.get_recommendation(temperature, humidity, hits)
 
 if __name__ == "__main__":
     # Тестирование
-    print("Тестирование AI системы:")
+    print("🤖 ТЕСТИРОВАНИЕ AI СИСТЕМЫ")
+    print("=" * 50)
     
     test_cases = [
-        (22.5, 55, 2),    # Норма
-        (27.0, 75, 8),    # Предупреждение
-        (32.0, 85, 18)    # Опасность
+        (22.5, 55, 0),    # Оптимальные условия
+        (27.5, 72, 8),    # Предупреждение
+        (32.0, 82, 20)    # Опасность
     ]
     
     for temp, hum, hits in test_cases:
         result = get_recommendation(temp, hum, hits)
         print(f"\nТемпература: {temp}°C, Влажность: {hum}%, Удары: {hits}")
-        print(f"Класс: {result['prediction_class']}, Уверенность: {result['confidence']:.2%}")
-        for rec in result['recommendations'][:2]:
-            print(f"  • {rec}")
+        print(f"Уровень: {result['prediction_class']}, Уверенность: {result['confidence']:.1%}")
+        print(f"Риск отказа: {result['failure_risk']:.1%}")
+        for i, rec in enumerate(result['recommendations'][:3], 1):
+            print(f"  {i}. {rec}")
+        print("-" * 50)

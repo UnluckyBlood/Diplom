@@ -1,63 +1,49 @@
 @echo off
+chcp 1251 > nul
 title Arduino Monitoring System
 color 0A
-echo =======================================================
-echo               ARDUINO MONITORING SYSTEM
-echo =======================================================
-echo.
-echo Ïîäãîòîâêà ñèñòåìû...
 
-REM Ïğîâåğêà âèğòóàëüíîãî îêğóæåíèÿ
-if not exist "venv\Scripts\activate.bat" (
-    echo Ñîçäàíèå âèğòóàëüíîãî îêğóæåíèÿ...
+echo ========================================
+echo    Arduino Monitoring System v1.0
+echo ========================================
+echo.
+
+echo [1] Checking Python...
+python --version
+if errorlevel 1 (
+    echo ERROR: Python not found
+    pause
+    exit /b 1
+)
+
+echo [2] Creating virtual environment if needed...
+if not exist "venv" (
+    echo Creating venv...
     python -m venv venv
 )
 
-REM Àêòèâàöèÿ âèğòóàëüíîãî îêğóæåíèÿ
+echo [3] Activating virtual environment...
 call venv\Scripts\activate.bat
 
-REM Óñòàíîâêà çàâèñèìîñòåé
-echo Óñòàíîâêà çàâèñèìîñòåé...
+echo [4] Installing dependencies...
 pip install fastapi uvicorn pyserial requests websockets --quiet
 
 echo.
-echo =======================================================
-echo               ÇÀÏÓÑÊ ÊÎÌÏÎÍÅÍÒÎÂ
-echo =======================================================
-echo.
-
-REM Çàïóñê âåá-ñåğâåğà
-echo [1] Çàïóñê âåá-ñåğâåğà...
+echo [5] Starting Web Server...
 start "Web Server" cmd /k "cd /d %~dp0 && call venv\Scripts\activate.bat && python WebServer\webserver.py"
 
-timeout /t 5 /nobreak > nul
+timeout /t 5 > nul
 
-REM Çàïóñê îáğàáîò÷èêà äàííûõ
-echo [2] Çàïóñê îáğàáîò÷èêà äàííûõ...
+echo [6] Starting Data Processor...
 start "Data Processor" cmd /k "cd /d %~dp0 && call venv\Scripts\activate.bat && python DataProcessor\simple_main.py"
 
 echo.
-echo =======================================================
-echo             ÑÈÑÒÅÌÀ ÓÑÏÅØÍÎ ÇÀÏÓÙÅÍÀ!
-echo =======================================================
+echo ========================================
+echo    SYSTEM STARTED!
+echo ========================================
 echo.
-echo ?? ÄÎÑÒÓÏÍÛÅ ÀÄĞÅÑÀ:
-echo    ?? Âåá-èíòåğôåéñ: http://localhost:8000
-echo    ? WebSocket: ws://localhost:8000/ws
-echo    ?? API äàííûå: POST http://localhost:8000/api/data
-echo    ?? API ñòàòóñ: GET http://localhost:8000/api/status
-echo    ?? API òåêóùèå: GET http://localhost:8000/api/current
+echo Open in browser: http://localhost:8000
 echo.
-echo ?? ÊÎÍÔÈÃÓĞÀÖÈß:
-echo    Ïîğò Arduino: COM3
-echo    Áàçà äàííûõ: sensor_data.db
-echo    AI ìîäóëü: simple_ai.py
+echo To stop: Close both CMD windows
 echo.
-echo ??  ÓÏĞÀÂËÅÍÈÅ:
-echo    • Äëÿ îñòàíîâêè çàêğîéòå îáà îêíà êîìàíäíîé ñòğîêè
-echo    • Ïåğâîå îêíî - Âåá-ñåğâåğ
-echo    • Âòîğîå îêíî - Îáğàáîò÷èê äàííûõ
-echo.
-echo =======================================================
-echo Íàæìèòå ëşáóş êëàâèøó äëÿ âûõîäà èç çàïóñêàòîğà...
-pause > nul
+pause
