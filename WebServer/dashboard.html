@@ -6,253 +6,68 @@
     <title>Arduino Monitoring System with AI</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: 'Segoe UI', Arial, sans-serif;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Arial, sans-serif; }
         
-        body {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: #333;
-            min-height: 100vh;
-            padding: 20px;
-        }
+        body { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #333; min-height: 100vh; padding: 20px; }
         
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-        }
+        .container { max-width: 1400px; margin: 0 auto; }
         
-        .header {
-            background: rgba(255, 255, 255, 0.95);
-            padding: 20px;
-            border-radius: 15px;
-            margin-bottom: 20px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
+        .header { background: rgba(255, 255, 255, 0.95); padding: 20px; border-radius: 15px; margin-bottom: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); display: flex; justify-content: space-between; align-items: center; }
         
-        .header h1 {
-            color: #2d3436;
-            font-size: 28px;
-        }
+        .header h1 { color: #2d3436; font-size: 28px; }
         
-        .header h1 i {
-            color: #667eea;
-            margin-right: 10px;
-        }
+        .header h1 i { color: #667eea; margin-right: 10px; }
         
-        .status-badge {
-            padding: 10px 20px;
-            background: #00b894;
-            color: white;
-            border-radius: 50px;
-            font-weight: bold;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
+        .status-badge { padding: 10px 20px; background: #00b894; color: white; border-radius: 50px; font-weight: bold; display: flex; align-items: center; gap: 10px; }
         
-        .dashboard-grid {
-            display: grid;
-            grid-template-columns: 2fr 1fr;
-            gap: 20px;
-        }
+        .dashboard-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
         
-        .main-panel {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 20px;
-        }
+        .main-panel { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
         
-        .card {
-            background: rgba(255, 255, 255, 0.95);
-            border-radius: 15px;
-            padding: 25px;
-            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
-            transition: transform 0.3s;
-        }
+        .card { background: rgba(255, 255, 255, 0.95); border-radius: 15px; padding: 25px; box-shadow: 0 8px 25px rgba(0,0,0,0.1); transition: transform 0.3s; }
         
-        .card:hover {
-            transform: translateY(-5px);
-        }
+        .card:hover { transform: translateY(-5px); }
         
-        .card-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            padding-bottom: 15px;
-            border-bottom: 2px solid #f1f2f6;
-        }
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #f1f2f6; }
         
-        .card-title {
-            font-size: 20px;
-            color: #2d3436;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
+        .card-title { font-size: 20px; color: #2d3436; display: flex; align-items: center; gap: 10px; }
         
-        .value {
-            font-size: 48px;
-            font-weight: bold;
-            color: #667eea;
-            margin: 10px 0;
-        }
+        .value { font-size: 48px; font-weight: bold; color: #667eea; margin: 10px 0; }
         
-        .unit {
-            font-size: 20px;
-            color: #636e72;
-            margin-left: 5px;
-        }
+        .unit { font-size: 20px; color: #636e72; margin-left: 5px; }
         
-        .sub-value {
-            color: #636e72;
-            font-size: 16px;
-            margin-top: 5px;
-        }
+        .sub-value { color: #636e72; font-size: 16px; margin-top: 5px; }
         
-        .ai-chat {
-            grid-column: span 2;
-            min-height: 400px;
-            display: flex;
-            flex-direction: column;
-        }
+        .ai-chat { grid-column: span 2; min-height: 400px; display: flex; flex-direction: column; }
         
-        .chat-messages {
-            flex: 1;
-            overflow-y: auto;
-            padding: 15px;
-            background: #f8f9fa;
-            border-radius: 10px;
-            margin: 15px 0;
-            max-height: 300px;
-        }
+        .chat-messages { flex: 1; overflow-y: auto; padding: 15px; background: #f8f9fa; border-radius: 10px; margin: 15px 0; max-height: 300px; }
         
-        .message {
-            padding: 12px 15px;
-            margin-bottom: 10px;
-            border-radius: 10px;
-            animation: fadeIn 0.3s;
-        }
+        .message { padding: 12px 15px; margin-bottom: 10px; border-radius: 10px; animation: fadeIn 0.3s; }
         
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
         }
         
-        .message.info {
-            background: #e3f2fd;
-            border-left: 4px solid #2196f3;
-        }
+        .message.info { background: #e3f2fd; border-left: 4px solid #2196f3; }
+        .message.warning { background: #fff3cd; border-left: 4px solid #ff9800; }
+        .message.danger { background: #f8d7da; border-left: 4px solid #dc3545; }
+        .message.success { background: #d4edda; border-left: 4px solid #28a745; }
         
-        .message.warning {
-            background: #fff3cd;
-            border-left: 4px solid #ff9800;
-        }
+        .message-time { font-size: 12px; color: #888; margin-top: 5px; text-align: right; }
         
-        .message.danger {
-            background: #f8d7da;
-            border-left: 4px solid #dc3545;
-        }
+        .controls { display: flex; gap: 10px; margin-top: 15px; }
         
-        .message-time {
-            font-size: 12px;
-            color: #888;
-            margin-top: 5px;
-            text-align: right;
-        }
+        .btn { padding: 12px 20px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; display: flex; align-items: center; gap: 8px; transition: all 0.3s; }
         
-        .controls {
-            display: flex;
-            gap: 10px;
-            margin-top: 15px;
-        }
+        .btn-primary { background: #667eea; color: white; }
+        .btn-primary:hover { background: #5a6fd8; }
         
-        .btn {
-            padding: 12px 20px;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: bold;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            transition: all 0.3s;
-        }
+        .btn-success { background: #00b894; color: white; }
+        .btn-success:hover { background: #00a085; }
         
-        .btn-primary {
-            background: #667eea;
-            color: white;
-        }
-        
-        .btn-primary:hover {
-            background: #5a6fd8;
-        }
-        
-        .btn-success {
-            background: #00b894;
-            color: white;
-        }
-        
-        .btn-success:hover {
-            background: #00a085;
-        }
-        
-        .history-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 15px;
-        }
-        
-        .history-table th, .history-table td {
-            padding: 12px;
-            text-align: left;
-            border-bottom: 1px solid #eee;
-        }
-        
-        .history-table th {
-            background: #f8f9fa;
-            font-weight: 600;
-        }
-        
-        .risk-indicator {
-            display: inline-block;
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            margin-right: 8px;
-        }
-        
-        .risk-low { background: #00b894; }
-        .risk-medium { background: #fdcb6e; }
-        .risk-high { background: #e17055; }
-        
-        .chart-container {
-            height: 300px;
-            margin-top: 20px;
-        }
-        
-        @media (max-width: 1200px) {
-            .dashboard-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-        
-        @media (max-width: 768px) {
-            .main-panel {
-                grid-template-columns: 1fr;
-            }
-            
-            .ai-chat {
-                grid-column: span 1;
-            }
-        }
+        @media (max-width: 1200px) { .dashboard-grid { grid-template-columns: 1fr; } }
+        @media (max-width: 768px) { .main-panel { grid-template-columns: 1fr; } .ai-chat { grid-column: span 1; } .value { font-size: 36px; } }
     </style>
 </head>
 <body>
@@ -267,55 +82,46 @@
         
         <div class="dashboard-grid">
             <div class="main-panel">
-                <!-- Карточка температуры -->
+                <!-- Температура -->
                 <div class="card">
                     <div class="card-header">
                         <div class="card-title">
                             <i class="fas fa-thermometer-half" style="color: #e17055;"></i>
                             Температура
                         </div>
-                        <div class="card-actions">
-                            <i class="fas fa-sync-alt" onclick="refreshData()"></i>
-                        </div>
                     </div>
                     <div class="value" id="temperature">--</div>
                     <div class="unit">°C</div>
-                    <div class="sub-value" id="tempTrend">Тренд: --</div>
+                    <div class="sub-value" id="tempStatus">Статус: --</div>
                 </div>
                 
-                <!-- Карточка влажности -->
+                <!-- Влажность -->
                 <div class="card">
                     <div class="card-header">
                         <div class="card-title">
                             <i class="fas fa-tint" style="color: #0984e3;"></i>
                             Влажность
                         </div>
-                        <div class="card-actions">
-                            <i class="fas fa-sync-alt" onclick="refreshData()"></i>
-                        </div>
                     </div>
                     <div class="value" id="humidity">--</div>
                     <div class="unit">%</div>
-                    <div class="sub-value" id="humTrend">Тренд: --</div>
+                    <div class="sub-value" id="humStatus">Статус: --</div>
                 </div>
                 
-                <!-- Карточка вибраций -->
+                <!-- Вибрации -->
                 <div class="card">
                     <div class="card-header">
                         <div class="card-title">
                             <i class="fas fa-vibrate" style="color: #00b894;"></i>
                             Вибрации
                         </div>
-                        <div class="card-actions">
-                            <i class="fas fa-sync-alt" onclick="refreshData()"></i>
-                        </div>
                     </div>
                     <div class="value" id="vibrations">0</div>
-                    <div class="unit">ударов</div>
-                    <div class="sub-value" id="lastHit">Последний: --</div>
+                    <div class="unit">уд/мин</div>
+                    <div class="sub-value">Всего ударов: <span id="totalHits">0</span></div>
                 </div>
                 
-                <!-- Карточка риска -->
+                <!-- Риск -->
                 <div class="card">
                     <div class="card-header">
                         <div class="card-title">
@@ -324,16 +130,15 @@
                         </div>
                     </div>
                     <div class="value" id="riskScore">0%</div>
-                    <div class="sub-value" id="riskLevel">Низкий</div>
-                    <div class="sub-value" id="riskRecommendation">--</div>
+                    <div class="sub-value" id="riskLevel">Уровень: Низкий</div>
                 </div>
                 
-                <!-- AI Чат -->
+                <!-- AI Чат (ОДНО сообщение) -->
                 <div class="card ai-chat">
                     <div class="card-header">
                         <div class="card-title">
                             <i class="fas fa-robot" style="color: #6c5ce7;"></i>
-                            AI Рекомендации
+                            AI Рекомендации (одно в минуту)
                         </div>
                         <button class="btn btn-primary" onclick="loadAIChat()">
                             <i class="fas fa-sync"></i> Обновить
@@ -342,7 +147,7 @@
                     
                     <div class="chat-messages" id="aiChat">
                         <div class="message info">
-                            <div>🤖 AI система инициализирована. Ожидание данных...</div>
+                            <div>🤖 AI система ожидает данных...</div>
                             <div class="message-time">Загружено</div>
                         </div>
                     </div>
@@ -363,27 +168,17 @@
                 <div class="card-header">
                     <div class="card-title">
                         <i class="fas fa-chart-line"></i>
-                        Статистика
+                        Система
                     </div>
                 </div>
                 
-                <div class="stat-item">
-                    <h3>Системная информация</h3>
-                    <div class="sub-value">Последнее обновление: <span id="lastUpdate">--:--:--</span></div>
-                    <div class="sub-value">Подключений WebSocket: <span id="wsConnections">0</span></div>
-                    <div class="sub-value">Всего данных: <span id="totalData">0</span> записей</div>
-                </div>
-                
-                <div class="stat-item" style="margin-top: 20px;">
-                    <h3>История (последние 5 мин)</h3>
-                    <div id="historyChart" class="chart-container">
-                        <canvas id="historyChartCanvas"></canvas>
-                    </div>
-                </div>
+                <div class="sub-value">Последнее обновление: <span id="lastUpdate">--:--:--</span></div>
+                <div class="sub-value">AI статус: <span id="aiStatus">Загрузка...</span></div>
+                <div class="sub-value">Следующее AI сообщение: <span id="nextAiMessage">60 сек</span></div>
                 
                 <div class="controls" style="margin-top: 20px;">
-                    <button class="btn btn-primary" onclick="exportData()">
-                        <i class="fas fa-download"></i> Экспорт данных
+                    <button class="btn btn-primary" onclick="manualAiCheck()">
+                        <i class="fas fa-robot"></i> Проверить сейчас
                     </button>
                     <button class="btn" onclick="showSettings()">
                         <i class="fas fa-cog"></i> Настройки
@@ -393,13 +188,11 @@
         </div>
     </div>
     
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         let ws;
-        let historyChart;
-        let aiMessages = [];
+        let aiMessageTimer = 60;
         
-        // Инициализация WebSocket
+        // WebSocket
         function initWebSocket() {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const wsUrl = `${protocol}//${window.location.host}/ws`;
@@ -417,13 +210,12 @@
                     const data = JSON.parse(event.data);
                     handleWebSocketMessage(data);
                 } catch (e) {
-                    console.error('Ошибка парсинга:', e);
+                    console.error('Ошибка:', e);
                 }
             };
             
             ws.onclose = function() {
                 updateStatus(false);
-                console.log('🔌 WebSocket отключен');
                 setTimeout(initWebSocket, 3000);
             };
         }
@@ -442,69 +234,117 @@
         }
         
         function handleWebSocketMessage(data) {
-            const now = new Date();
-            document.getElementById('lastUpdate').textContent = now.toLocaleTimeString();
+            document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
             
             if (data.type === 'realtime') {
                 updateDashboard(data.data);
-            } else if (data.type === '5min_avg') {
-                addAIMessage(data);
             } else if (data.type === 'ai_recommendation') {
                 addChatMessage(data.data);
-            } else if (data.type === 'connection') {
-                console.log('🔗 Соединение установлено');
             }
         }
         
         function updateDashboard(data) {
-            if (data.temperature) {
-                document.getElementById('temperature').textContent = data.temperature.toFixed(1);
+            // Температура
+            if (data.temperature !== undefined) {
+                const temp = data.temperature.toFixed(1);
+                document.getElementById('temperature').textContent = temp;
+                
+                let tempStatus = 'Норма';
+                if (data.temperature > 35) tempStatus = 'Критично';
+                else if (data.temperature > 30) tempStatus = 'Повышена';
+                else if (data.temperature < 15) tempStatus = 'Низкая';
+                
+                document.getElementById('tempStatus').textContent = `Статус: ${tempStatus}`;
             }
-            if (data.humidity) {
-                document.getElementById('humidity').textContent = data.humidity.toFixed(1);
+            
+            // Влажность
+            if (data.humidity !== undefined) {
+                const hum = data.humidity.toFixed(1);
+                document.getElementById('humidity').textContent = hum;
+                
+                let humStatus = 'Норма';
+                if (data.humidity > 80) humStatus = 'Высокая';
+                else if (data.humidity > 60) humStatus = 'Повышена';
+                else if (data.humidity < 20) humStatus = 'Низкая';
+                
+                document.getElementById('humStatus').textContent = `Статус: ${humStatus}`;
             }
+            
+            // Вибрации
+            if (data.hits_per_minute !== undefined) {
+                const hits = parseFloat(data.hits_per_minute);
+                document.getElementById('vibrations').textContent = hits.toFixed(1);
+                
+                // Обновляем риск
+                updateRiskFromHits(hits);
+            }
+            
+            // Общее количество ударов
             if (data.hit_count !== undefined) {
-                document.getElementById('vibrations').textContent = data.hit_count;
-            }
-            if (data.hit_detected) {
-                document.getElementById('lastHit').textContent = `Последний: ${new Date().toLocaleTimeString()}`;
+                document.getElementById('totalHits').textContent = data.hit_count;
             }
         }
         
+        function updateRiskFromHits(hitsPerMinute) {
+            let riskPercent, riskLevel;
+            
+            if (hitsPerMinute > 30) {
+                riskPercent = 90;
+                riskLevel = 'Критический';
+            } else if (hitsPerMinute > 20) {
+                riskPercent = 70;
+                riskLevel = 'Высокий';
+            } else if (hitsPerMinute > 10) {
+                riskPercent = 50;
+                riskLevel = 'Средний';
+            } else if (hitsPerMinute > 5) {
+                riskPercent = 30;
+                riskLevel = 'Низкий';
+            } else {
+                riskPercent = 10;
+                riskLevel = 'Минимальный';
+            }
+            
+            document.getElementById('riskScore').textContent = `${riskPercent}%`;
+            document.getElementById('riskLevel').textContent = `Уровень: ${riskLevel}`;
+        }
+        
         function loadInitialData() {
-            // Загружаем текущие данные
             fetch('/api/current')
                 .then(r => r.json())
                 .then(data => {
                     updateDashboard(data);
+                    document.getElementById('aiStatus').textContent = 'Активен';
+                    document.getElementById('aiStatus').style.color = '#00b894';
+                })
+                .catch(err => {
+                    console.error('Ошибка:', err);
+                    document.getElementById('aiStatus').textContent = 'Ошибка';
+                    document.getElementById('aiStatus').style.color = '#e17055';
                 });
             
-            // Загружаем AI рекомендации
             loadAIChat();
-            
-            // Загружаем историю
-            fetch('/api/history?hours=1')
-                .then(r => r.json())
-                .then(data => {
-                    updateHistoryChart(data);
-                });
         }
         
         function loadAIChat() {
-            fetch('/api/ai/recommendations?limit=10')
+            fetch('/api/ai/recommendations?limit=5')
                 .then(r => r.json())
                 .then(data => {
                     const chatDiv = document.getElementById('aiChat');
                     chatDiv.innerHTML = '';
                     
-                    if (data.length === 0) {
+                    if (!Array.isArray(data) || data.length === 0) {
                         chatDiv.innerHTML = '<div class="message info">🤖 AI рекомендаций пока нет</div>';
                         return;
                     }
                     
-                    data.forEach(msg => {
+                    // Показываем только последние 3 сообщения
+                    data.slice(0, 3).forEach(msg => {
                         addChatMessage(msg, false);
                     });
+                })
+                .catch(err => {
+                    console.error('Ошибка:', err);
                 });
         }
         
@@ -512,110 +352,41 @@
             const chatDiv = document.getElementById('aiChat');
             const messageDiv = document.createElement('div');
             
-            messageDiv.className = `message ${message.type || 'info'}`;
+            // Определяем тип
+            let messageType = message.type || 'info';
+            const msgText = message.message || "";
             
-            // Форматирование времени
-            const time = new Date(message.timestamp);
-            const timeStr = time.toLocaleTimeString();
+            if (msgText.includes('🔴') || msgText.includes('КРИТИЧЕСКИЙ')) {
+                messageType = 'danger';
+            } else if (msgText.includes('🟠') || msgText.includes('ВЫСОКАЯ') || msgText.includes('ПОВЫШЕННЫЕ')) {
+                messageType = 'warning';
+            } else if (msgText.includes('🟡') || msgText.includes('ПОВЫШЕНА') || msgText.includes('ВНИМАНИЕ')) {
+                messageType = 'warning';
+            } else if (msgText.includes('✅') || msgText.includes('ХОРОШО') || msgText.includes('ИДЕАЛЬНЫЕ')) {
+                messageType = 'success';
+            }
+            
+            messageDiv.className = `message ${messageType}`;
+            
+            const time = new Date(message.timestamp || new Date());
+            const timeStr = time.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
             
             messageDiv.innerHTML = `
-                <div>${message.message}</div>
+                <div style="font-size: 14px; line-height: 1.4;">${msgText}</div>
                 <div class="message-time">${timeStr}</div>
             `;
             
-            chatDiv.prepend(messageDiv);
+            // Добавляем в начало (новые сверху)
+            chatDiv.insertBefore(messageDiv, chatDiv.firstChild);
+            
+            // Ограничиваем 3 сообщения
+            while (chatDiv.children.length > 3) {
+                chatDiv.removeChild(chatDiv.lastChild);
+            }
             
             if (scroll) {
                 chatDiv.scrollTop = 0;
             }
-        }
-        
-        function addAIMessage(data) {
-            const message = {
-                timestamp: data.timestamp || new Date().toISOString(),
-                message: `📊 5-минутный отчет: ${data.avg_temperature.toFixed(1)}°C, ${data.avg_humidity.toFixed(1)}%, ${data.total_hits} ударов`,
-                type: 'info'
-            };
-            
-            if (data.ai_recommendations && data.ai_recommendations.length > 0) {
-                message.message += ` | ${data.ai_recommendations[0]}`;
-                if (data.ai_confidence > 0.7) {
-                    message.type = 'warning';
-                }
-            }
-            
-            addChatMessage(message);
-            
-            // Обновляем риск
-            if (data.ai_confidence !== undefined) {
-                const risk = Math.round(data.ai_confidence * 100);
-                document.getElementById('riskScore').textContent = `${risk}%`;
-                document.getElementById('riskLevel').textContent = 
-                    risk > 70 ? 'Высокий' : risk > 40 ? 'Средний' : 'Низкий';
-            }
-        }
-        
-        function updateHistoryChart(historyData) {
-            if (!historyData || historyData.length === 0) return;
-            
-            const ctx = document.getElementById('historyChartCanvas').getContext('2d');
-            
-            // Сортируем по времени
-            historyData.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-            
-            const labels = historyData.slice(-20).map(d => 
-                new Date(d.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
-            );
-            
-            const temps = historyData.slice(-20).map(d => d.temperature);
-            const hums = historyData.slice(-20).map(d => d.humidity);
-            
-            if (historyChart) {
-                historyChart.destroy();
-            }
-            
-            historyChart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [
-                        {
-                            label: 'Температура (°C)',
-                            data: temps,
-                            borderColor: '#e17055',
-                            backgroundColor: 'rgba(225, 112, 85, 0.1)',
-                            tension: 0.4,
-                            fill: true
-                        },
-                        {
-                            label: 'Влажность (%)',
-                            data: hums,
-                            borderColor: '#0984e3',
-                            backgroundColor: 'rgba(9, 132, 227, 0.1)',
-                            tension: 0.4,
-                            fill: true
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'top',
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: false
-                        }
-                    }
-                }
-            });
-        }
-        
-        function refreshData() {
-            loadInitialData();
         }
         
         function simulateWarning() {
@@ -624,43 +395,64 @@
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
                     timestamp: new Date().toISOString(),
-                    message: '⚠️ Тестовое предупреждение: Проверка системы',
-                    type: 'warning',
-                    parameters: {test: true}
+                    message: '⚠️ ТЕСТОВОЕ ПРЕДУПРЕЖДЕНИЕ: Проверка системы мониторинга работает корректно',
+                    type: 'warning'
                 })
+            })
+            .then(() => {
+                alert('✅ Тест выполнен');
+                loadAIChat();
+            })
+            .catch(err => {
+                alert('❌ Ошибка теста');
+                console.error(err);
             });
         }
         
-        function showHistory() {
-            window.open('/api/history?hours=24', '_blank');
-        }
-        
-        function exportData() {
-            fetch('/api/history?hours=24')
+        function manualAiCheck() {
+            fetch('/api/ai/analyze')
                 .then(r => r.json())
                 .then(data => {
-                    const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `arduino-data-${new Date().toISOString().slice(0,10)}.json`;
-                    a.click();
-                    URL.revokeObjectURL(url);
+                    alert('🤖 AI проверка выполнена');
+                    loadAIChat();
+                })
+                .catch(err => {
+                    alert('❌ Ошибка проверки');
                 });
         }
         
-        function showSettings() {
-            alert('Настройки системы:\n\n1. Порт Arduino: COM3\n2. AI анализ: каждые 5 мин\n3. История: 24 часа\n\nДля изменения настроек обратитесь к администратору.');
+        function showHistory() {
+            window.open('/api/history?hours=24&format=json', '_blank');
         }
         
-        // Инициализация при загрузке
+        function showSettings() {
+            alert('⚙️ Настройки:\n\n• AI сообщения: 1 в минуту\n• Вибрации: удары/мин\n• Критические пороги:\n  - Температура > 38°C\n  - Влажность > 90%\n  - Вибрации > 40 уд/мин');
+        }
+        
+        // Таймер для AI сообщений
+        function updateAiTimer() {
+            aiMessageTimer--;
+            if (aiMessageTimer <= 0) {
+                aiMessageTimer = 60;
+                document.getElementById('nextAiMessage').textContent = 'Скоро...';
+            } else {
+                document.getElementById('nextAiMessage').textContent = `${aiMessageTimer} сек`;
+            }
+        }
+        
+        // Инициализация
         window.onload = function() {
             initWebSocket();
             
-            // Обновляем время каждую секунду
+            // Обновляем таймер каждую секунду
+            setInterval(updateAiTimer, 1000);
+            
+            // Автообновление AI чата каждую минуту
+            setInterval(loadAIChat, 60000);
+            
+            // Показываем время
             setInterval(() => {
-                const now = new Date();
-                document.getElementById('wsConnections').textContent = ws.readyState === 1 ? 'Активно' : 'Нет';
+                document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
             }, 1000);
         };
     </script>
