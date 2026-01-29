@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Arduino Monitoring System with AI</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Arial, sans-serif; }
         
@@ -65,6 +66,8 @@
         
         .btn-success { background: #00b894; color: white; }
         .btn-success:hover { background: #00a085; }
+        
+        .chart-container { height: 300px; margin-top: 20px; }
         
         @media (max-width: 1200px) { .dashboard-grid { grid-template-columns: 1fr; } }
         @media (max-width: 768px) { .main-panel { grid-template-columns: 1fr; } .ai-chat { grid-column: span 1; } .value { font-size: 36px; } }
@@ -133,12 +136,12 @@
                     <div class="sub-value" id="riskLevel">Уровень: Низкий</div>
                 </div>
                 
-                <!-- AI Чат (ОДНО сообщение) -->
+                <!-- AI Чат -->
                 <div class="card ai-chat">
                     <div class="card-header">
                         <div class="card-title">
                             <i class="fas fa-robot" style="color: #6c5ce7;"></i>
-                            AI Рекомендации (одно в минуту)
+                            AI Рекомендации
                         </div>
                         <button class="btn btn-primary" onclick="loadAIChat()">
                             <i class="fas fa-sync"></i> Обновить
@@ -154,7 +157,7 @@
                     
                     <div class="controls">
                         <button class="btn btn-success" onclick="simulateWarning()">
-                            <i class="fas fa-bell"></i> Тест предупреждения
+                            <i class="fas fa-bell"></i> Тест
                         </button>
                         <button class="btn btn-primary" onclick="showHistory()">
                             <i class="fas fa-history"></i> История
@@ -163,25 +166,39 @@
                 </div>
             </div>
             
-            <!-- Боковая панель -->
+            <!-- Боковая панель с графиками -->
             <div class="card">
                 <div class="card-header">
                     <div class="card-title">
                         <i class="fas fa-chart-line"></i>
-                        Система
+                        Графики (60 минут)
                     </div>
+                    <button class="btn btn-primary" onclick="refreshCharts()" style="padding: 8px 15px; font-size: 14px;">
+                        <i class="fas fa-sync"></i>
+                    </button>
                 </div>
                 
-                <div class="sub-value">Последнее обновление: <span id="lastUpdate">--:--:--</span></div>
-                <div class="sub-value">AI статус: <span id="aiStatus">Загрузка...</span></div>
-                <div class="sub-value">Следующее AI сообщение: <span id="nextAiMessage">60 сек</span></div>
+                <!-- График температуры -->
+                <div class="sub-value">Температура:</div>
+                <div class="chart-container">
+                    <canvas id="tempChart"></canvas>
+                </div>
+                
+                <!-- График влажности -->
+                <div class="sub-value" style="margin-top: 20px;">Влажность:</div>
+                <div class="chart-container">
+                    <canvas id="humChart"></canvas>
+                </div>
+                
+                <!-- График вибраций -->
+                <div class="sub-value" style="margin-top: 20px;">Вибрации:</div>
+                <div class="chart-container">
+                    <canvas id="vibChart"></canvas>
+                </div>
                 
                 <div class="controls" style="margin-top: 20px;">
-                    <button class="btn btn-primary" onclick="manualAiCheck()">
-                        <i class="fas fa-robot"></i> Проверить сейчас
-                    </button>
-                    <button class="btn" onclick="showSettings()">
-                        <i class="fas fa-cog"></i> Настройки
+                    <button class="btn btn-primary" onclick="exportData()">
+                        <i class="fas fa-download"></i> Экспорт
                     </button>
                 </div>
             </div>
@@ -190,7 +207,7 @@
     
     <script>
         let ws;
-        let aiMessageTimer = 60;
+        let tempChart, humChart, vibChart;
         
         // WebSocket
         function initWebSocket() {
@@ -201,8 +218,8 @@
             
             ws.onopen = function() {
                 updateStatus(true);
-                console.log('✅ WebSocket подключен');
                 loadInitialData();
+                loadCharts();
             };
             
             ws.onmessage = function(event) {
@@ -234,10 +251,10 @@
         }
         
         function handleWebSocketMessage(data) {
-            document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
-            
             if (data.type === 'realtime') {
                 updateDashboard(data.data);
+                // Обновляем графики новыми данными
+                addDataToCharts(data.data);
             } else if (data.type === 'ai_recommendation') {
                 addChatMessage(data.data);
             }
@@ -250,11 +267,20 @@
                 document.getElementById('temperature').textContent = temp;
                 
                 let tempStatus = 'Норма';
-                if (data.temperature > 35) tempStatus = 'Критично';
-                else if (data.temperature > 30) tempStatus = 'Повышена';
-                else if (data.temperature < 15) tempStatus = 'Низкая';
+                let tempColor = '#00b894';
+                if (data.temperature > 35) {
+                    tempStatus = 'Критично';
+                    tempColor = '#e17055';
+                } else if (data.temperature > 30) {
+                    tempStatus = 'Повышена';
+                    tempColor = '#fdcb6e';
+                } else if (data.temperature < 15) {
+                    tempStatus = 'Низкая';
+                    tempColor = '#0984e3';
+                }
                 
                 document.getElementById('tempStatus').textContent = `Статус: ${tempStatus}`;
+                document.getElementById('tempStatus').style.color = tempColor;
             }
             
             // Влажность
@@ -263,17 +289,37 @@
                 document.getElementById('humidity').textContent = hum;
                 
                 let humStatus = 'Норма';
-                if (data.humidity > 80) humStatus = 'Высокая';
-                else if (data.humidity > 60) humStatus = 'Повышена';
-                else if (data.humidity < 20) humStatus = 'Низкая';
+                let humColor = '#00b894';
+                if (data.humidity > 80) {
+                    humStatus = 'Высокая';
+                    humColor = '#e17055';
+                } else if (data.humidity > 60) {
+                    humStatus = 'Повышена';
+                    humColor = '#fdcb6e';
+                } else if (data.humidity < 20) {
+                    humStatus = 'Низкая';
+                    humColor = '#0984e3';
+                }
                 
                 document.getElementById('humStatus').textContent = `Статус: ${humStatus}`;
+                document.getElementById('humStatus').style.color = humColor;
             }
             
             // Вибрации
             if (data.hits_per_minute !== undefined) {
                 const hits = parseFloat(data.hits_per_minute);
                 document.getElementById('vibrations').textContent = hits.toFixed(1);
+                
+                // Цвет вибраций
+                if (hits > 30) {
+                    document.getElementById('vibrations').style.color = '#e17055';
+                } else if (hits > 20) {
+                    document.getElementById('vibrations').style.color = '#fdcb6e';
+                } else if (hits > 10) {
+                    document.getElementById('vibrations').style.color = '#00b894';
+                } else {
+                    document.getElementById('vibrations').style.color = '#667eea';
+                }
                 
                 // Обновляем риск
                 updateRiskFromHits(hits);
@@ -286,27 +332,34 @@
         }
         
         function updateRiskFromHits(hitsPerMinute) {
-            let riskPercent, riskLevel;
+            let riskPercent, riskLevel, riskColor;
             
             if (hitsPerMinute > 30) {
                 riskPercent = 90;
                 riskLevel = 'Критический';
+                riskColor = '#e17055';
             } else if (hitsPerMinute > 20) {
                 riskPercent = 70;
                 riskLevel = 'Высокий';
+                riskColor = '#fdcb6e';
             } else if (hitsPerMinute > 10) {
                 riskPercent = 50;
                 riskLevel = 'Средний';
+                riskColor = '#00b894';
             } else if (hitsPerMinute > 5) {
                 riskPercent = 30;
                 riskLevel = 'Низкий';
+                riskColor = '#667eea';
             } else {
                 riskPercent = 10;
                 riskLevel = 'Минимальный';
+                riskColor = '#667eea';
             }
             
             document.getElementById('riskScore').textContent = `${riskPercent}%`;
+            document.getElementById('riskScore').style.color = riskColor;
             document.getElementById('riskLevel').textContent = `Уровень: ${riskLevel}`;
+            document.getElementById('riskLevel').style.color = riskColor;
         }
         
         function loadInitialData() {
@@ -314,13 +367,6 @@
                 .then(r => r.json())
                 .then(data => {
                     updateDashboard(data);
-                    document.getElementById('aiStatus').textContent = 'Активен';
-                    document.getElementById('aiStatus').style.color = '#00b894';
-                })
-                .catch(err => {
-                    console.error('Ошибка:', err);
-                    document.getElementById('aiStatus').textContent = 'Ошибка';
-                    document.getElementById('aiStatus').style.color = '#e17055';
                 });
             
             loadAIChat();
@@ -338,13 +384,9 @@
                         return;
                     }
                     
-                    // Показываем только последние 3 сообщения
                     data.slice(0, 3).forEach(msg => {
                         addChatMessage(msg, false);
                     });
-                })
-                .catch(err => {
-                    console.error('Ошибка:', err);
                 });
         }
         
@@ -352,7 +394,6 @@
             const chatDiv = document.getElementById('aiChat');
             const messageDiv = document.createElement('div');
             
-            // Определяем тип
             let messageType = message.type || 'info';
             const msgText = message.message || "";
             
@@ -360,7 +401,7 @@
                 messageType = 'danger';
             } else if (msgText.includes('🟠') || msgText.includes('ВЫСОКАЯ') || msgText.includes('ПОВЫШЕННЫЕ')) {
                 messageType = 'warning';
-            } else if (msgText.includes('🟡') || msgText.includes('ПОВЫШЕНА') || msgText.includes('ВНИМАНИЕ')) {
+            } else if (msgText.includes('🟡') || msgText.includes('ПОВЫШЕНА')) {
                 messageType = 'warning';
             } else if (msgText.includes('✅') || msgText.includes('ХОРОШО') || msgText.includes('ИДЕАЛЬНЫЕ')) {
                 messageType = 'success';
@@ -376,10 +417,8 @@
                 <div class="message-time">${timeStr}</div>
             `;
             
-            // Добавляем в начало (новые сверху)
             chatDiv.insertBefore(messageDiv, chatDiv.firstChild);
             
-            // Ограничиваем 3 сообщения
             while (chatDiv.children.length > 3) {
                 chatDiv.removeChild(chatDiv.lastChild);
             }
@@ -389,71 +428,228 @@
             }
         }
         
+        // ФУНКЦИИ ГРАФИКОВ
+        function loadCharts() {
+            fetch('/api/history?hours=1')
+                .then(r => r.json())
+                .then(historyData => {
+                    createCharts(historyData);
+                });
+        }
+        
+        function createCharts(historyData) {
+            if (!Array.isArray(historyData) || historyData.length === 0) {
+                createEmptyCharts();
+                return;
+            }
+            
+            // Сортируем по времени
+            historyData.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+            
+            // Берем последние 30 точек
+            const displayData = historyData.slice(-30);
+            
+            const labels = displayData.map(d => 
+                new Date(d.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+            );
+            
+            const temps = displayData.map(d => d.temperature || 0);
+            const hums = displayData.map(d => d.humidity || 0);
+            const vibes = displayData.map(d => d.hits_per_minute || 0);
+            
+            // График температуры
+            const tempCtx = document.getElementById('tempChart').getContext('2d');
+            if (tempChart) tempChart.destroy();
+            
+            tempChart = new Chart(tempCtx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Температура (°C)',
+                        data: temps,
+                        borderColor: '#e17055',
+                        backgroundColor: 'rgba(225, 112, 85, 0.1)',
+                        tension: 0.4,
+                        fill: true,
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: false, grid: { color: 'rgba(0,0,0,0.05)' } },
+                        x: { grid: { display: false } }
+                    }
+                }
+            });
+            
+            // График влажности
+            const humCtx = document.getElementById('humChart').getContext('2d');
+            if (humChart) humChart.destroy();
+            
+            humChart = new Chart(humCtx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Влажность (%)',
+                        data: hums,
+                        borderColor: '#0984e3',
+                        backgroundColor: 'rgba(9, 132, 227, 0.1)',
+                        tension: 0.4,
+                        fill: true,
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: false, grid: { color: 'rgba(0,0,0,0.05)' } },
+                        x: { grid: { display: false } }
+                    }
+                }
+            });
+            
+            // График вибраций
+            const vibCtx = document.getElementById('vibChart').getContext('2d');
+            if (vibChart) vibChart.destroy();
+            
+            vibChart = new Chart(vibCtx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Вибрации (уд/мин)',
+                        data: vibes,
+                        borderColor: '#00b894',
+                        backgroundColor: 'rgba(0, 184, 148, 0.1)',
+                        tension: 0.4,
+                        fill: true,
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' } },
+                        x: { grid: { display: false } }
+                    }
+                }
+            });
+        }
+        
+        function addDataToCharts(newData) {
+            if (!newData.timestamp || !tempChart || !humChart || !vibChart) return;
+            
+            const time = new Date(newData.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            
+            // Добавляем данные в графики
+            [tempChart, humChart, vibChart].forEach(chart => {
+                if (chart.data.labels.length > 30) {
+                    chart.data.labels.shift();
+                    chart.data.datasets.forEach(dataset => dataset.data.shift());
+                }
+                
+                chart.data.labels.push(time);
+            });
+            
+            // Температура
+            tempChart.data.datasets[0].data.push(newData.temperature || 0);
+            tempChart.update('none');
+            
+            // Влажность
+            humChart.data.datasets[0].data.push(newData.humidity || 0);
+            humChart.update('none');
+            
+            // Вибрации
+            vibChart.data.datasets[0].data.push(newData.hits_per_minute || 0);
+            vibChart.update('none');
+        }
+        
+        function createEmptyCharts() {
+            const emptyData = ['Нет данных'];
+            const emptyValues = [0];
+            
+            [document.getElementById('tempChart'), 
+             document.getElementById('humChart'), 
+             document.getElementById('vibChart')].forEach(canvas => {
+                const ctx = canvas.getContext('2d');
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: emptyData,
+                        datasets: [{
+                            label: 'Нет данных',
+                            data: emptyValues,
+                            borderColor: '#ccc',
+                            backgroundColor: 'rgba(204, 204, 204, 0.1)',
+                            fill: true
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } }
+                    }
+                });
+            });
+        }
+        
+        function refreshCharts() {
+            loadCharts();
+        }
+        
         function simulateWarning() {
             fetch('/api/ai/add_recommendation', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
                     timestamp: new Date().toISOString(),
-                    message: '⚠️ ТЕСТОВОЕ ПРЕДУПРЕЖДЕНИЕ: Проверка системы мониторинга работает корректно',
+                    message: '⚠️ ТЕСТ: Система мониторинга работает нормально',
                     type: 'warning'
                 })
             })
             .then(() => {
-                alert('✅ Тест выполнен');
                 loadAIChat();
-            })
-            .catch(err => {
-                alert('❌ Ошибка теста');
-                console.error(err);
             });
-        }
-        
-        function manualAiCheck() {
-            fetch('/api/ai/analyze')
-                .then(r => r.json())
-                .then(data => {
-                    alert('🤖 AI проверка выполнена');
-                    loadAIChat();
-                })
-                .catch(err => {
-                    alert('❌ Ошибка проверки');
-                });
         }
         
         function showHistory() {
             window.open('/api/history?hours=24&format=json', '_blank');
         }
         
-        function showSettings() {
-            alert('⚙️ Настройки:\n\n• AI сообщения: 1 в минуту\n• Вибрации: удары/мин\n• Критические пороги:\n  - Температура > 38°C\n  - Влажность > 90%\n  - Вибрации > 40 уд/мин');
-        }
-        
-        // Таймер для AI сообщений
-        function updateAiTimer() {
-            aiMessageTimer--;
-            if (aiMessageTimer <= 0) {
-                aiMessageTimer = 60;
-                document.getElementById('nextAiMessage').textContent = 'Скоро...';
-            } else {
-                document.getElementById('nextAiMessage').textContent = `${aiMessageTimer} сек`;
-            }
+        function exportData() {
+            fetch('/api/history?hours=24')
+                .then(r => r.json())
+                .then(data => {
+                    const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `arduino-data-${new Date().toISOString().slice(0,10)}.json`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                });
         }
         
         // Инициализация
         window.onload = function() {
             initWebSocket();
             
-            // Обновляем таймер каждую секунду
-            setInterval(updateAiTimer, 1000);
+            // Автообновление графиков каждые 30 секунд
+            setInterval(loadCharts, 30000);
             
             // Автообновление AI чата каждую минуту
-            setInterval(loadAIChat, 60000);
-            
-            // Показываем время
-            setInterval(() => {
-                document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
-            }, 1000);
+            setInterval(loadAIChat, 30000);
         };
     </script>
 </body>

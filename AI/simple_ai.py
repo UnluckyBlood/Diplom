@@ -13,7 +13,7 @@ class ImprovedAIModel:
         self.last_reset_time = datetime.now()
         self.last_ai_message = "🤖 AI система инициализирована"
         self.last_ai_time = datetime.now()
-        self.message_cooldown = 60  # Сообщение раз в 60 секунд
+        self.message_cooldown = 5  # Сообщение раз в 60 секунд
         print("🤖 AI модель инициализирована (одно сообщение в минуту)")
     
     def _calculate_hits_per_minute(self, new_total_hits: int) -> float:
