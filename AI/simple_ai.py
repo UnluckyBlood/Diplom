@@ -4,140 +4,150 @@ from typing import Dict
 import warnings
 warnings.filterwarnings('ignore')
 
-class ImprovedAIModel:
-    """AI модель с одним сообщением в минуту"""
+# КОНСТАНТЫ ДЛЯ ТЕМПЕРАТУРЫ
+TEMP_CRITICAL_HIGH = 38.0      # Критический перегрев
+TEMP_WARNING_HIGH = 32.0       # Высокая температура
+TEMP_CAUTION_HIGH = 28.0       # Повышенная температура
+
+# КОНСТАНТЫ ДЛЯ ВЛАЖНОСТИ
+HUMIDITY_CRITICAL_HIGH = 90.0  # Критическая влажность
+HUMIDITY_WARNING_HIGH = 75.0   # Высокая влажность
+HUMIDITY_CAUTION_HIGH = 65.0   # Повышенная влажность
+
+# КОНСТАНТЫ ДЛЯ ВИБРАЦИЙ
+VIBRATION_CRITICAL_HIGH = 40.0 # Критические вибрации
+VIBRATION_WARNING_HIGH = 25.0  # Высокие вибрации
+VIBRATION_CAUTION_HIGH = 15.0  # Повышенные вибрации
+
+class SimpleAIModel:
+    """Простая AI модель с мгновенной реакцией"""
     
     def __init__(self):
         self.hit_timestamps = []
         self.last_total_hits = 0
-        self.last_reset_time = datetime.now()
-        self.last_ai_message = "🤖 AI система инициализирована"
-        self.last_ai_time = datetime.now()
-        self.message_cooldown = 5  # Сообщение раз в 60 секунд
-        print("🤖 AI модель инициализирована (одно сообщение в минуту)")
+        self.last_status = "unknown"
+        
+        print("🤖 Простая AI модель инициализирована (мгновенная реакция)")
     
     def _calculate_hits_per_minute(self, new_total_hits: int) -> float:
-        """Правильный подсчет ударов в минуту"""
+        """Подсчет ударов в минуту"""
         current_time = datetime.now()
         
-        if (current_time - self.last_reset_time).seconds > 300:
-            self.hit_timestamps = []
-            self.last_total_hits = new_total_hits
-            self.last_reset_time = current_time
-            return 0
-        
+        # Если счетчик сброшен
         if new_total_hits < self.last_total_hits:
-            self.hit_timestamps = []
+            self.hit_timestamps = [current_time] * new_total_hits
             self.last_total_hits = new_total_hits
-            return 0
+            return float(new_total_hits)
         
+        # Добавляем новые удары
         if new_total_hits > self.last_total_hits:
             hits_delta = new_total_hits - self.last_total_hits
             for _ in range(hits_delta):
                 self.hit_timestamps.append(current_time)
             self.last_total_hits = new_total_hits
         
+        # Оставляем только удары за последнюю минуту
         one_minute_ago = current_time - timedelta(seconds=60)
         self.hit_timestamps = [ts for ts in self.hit_timestamps if ts > one_minute_ago]
         
         return float(len(self.hit_timestamps))
     
-    def _generate_ai_message(self, temp: float, hum: float, hits_per_min: float) -> str:
-        """Генерирует ОДНО интеллектуальное сообщение"""
-        
-        current_time = datetime.now()
-        
-        # Проверяем кулдаун (1 сообщение в минуту)
-        if (current_time - self.last_ai_time).seconds < self.message_cooldown:
-            return self.last_ai_message  # Возвращаем старое сообщение
-        
-        # ===== КРИТИЧЕСКИЕ СОСТОЯНИЯ =====
-        if temp > 38:
-            msg = f"🔴 КРИТИЧЕСКИЙ ПЕРЕГРЕВ {temp:.1f}°C! Немедленно: 1) Остановите оборудование 2) Проверьте вентиляторы 3) Очистите радиаторы"
-        
-        elif hum > 90:
-            msg = f"🔴 КРИТИЧЕСКАЯ ВЛАЖНОСТЬ {hum:.1f}%! Немедленно: 1) Включите осушитель 2) Проверьте герметичность 3) Уберите влагу"
-        
-        elif hits_per_min > 40:
-            msg = f"🔴 ОПАСНЫЕ ВИБРАЦИИ {hits_per_min:.1f} уд/мин! Немедленно: 1) Проверьте крепления 2) Выполните балансировку 3) Установите демпферы"
-        
-        # ===== ВЫСОКИЙ РИСК =====
-        elif temp > 32:
-            msg = f"🟠 ВЫСОКАЯ ТЕМПЕРАТУРА {temp:.1f}°C. Проверьте: 1) Вентиляцию помещения 2) Систему охлаждения 3) Радиаторы"
-        
-        elif hum > 75:
-            msg = f"🟠 ВЫСОКАЯ ВЛАЖНОСТЬ {hum:.1f}%. Проверьте: 1) Осушитель воздуха 2) Отсутствие протечек 3) Герметичность корпуса"
-        
-        elif hits_per_min > 25:
-            msg = f"🟠 ПОВЫШЕННЫЕ ВИБРАЦИИ {hits_per_min:.1f} уд/мин. Проверьте: 1) Крепежные винты 2) Амортизационные прокладки 3) Ровность установки"
-        
-        # ===== ВНИМАНИЕ =====
-        elif temp > 28:
-            msg = f"🟡 ТЕМПЕРАТУРА ПОВЫШЕНА {temp:.1f}°C. Рекомендации: 1) Мониторьте нагрев 2) Улучшите вентиляцию 3) Очистите от пыли"
-        
-        elif hum > 65:
-            msg = f"🟡 ВЛАЖНОСТЬ ПОВЫШЕНА {hum:.1f}%. Рекомендации: 1) Контролируйте уровень 2) Улучшите вентиляцию 3) Проверьте осушитель"
-        
-        elif hits_per_min > 15:
-            msg = f"🟡 ВИБРАЦИИ {hits_per_min:.1f} уд/мин. Рекомендации: 1) Проверяйте крепления 2) Установите датчики 3) Мониторьте тенденцию"
-        
-        # ===== ИДЕАЛЬНЫЕ УСЛОВИЯ =====
-        elif 18 <= temp <= 28 and 30 <= hum <= 60 and hits_per_min <= 5:
-            msg = f"✅ ИДЕАЛЬНЫЕ УСЛОВИЯ: {temp:.1f}°C, {hum:.1f}%, {hits_per_min:.1f} уд/мин. Оборудование работает оптимально"
-        
-        # ===== ВСЁ ХОРОШО =====
-        else:
-            msg = f"✅ ВСЁ ХОРОШО: {temp:.1f}°C, {hum:.1f}%, {hits_per_min:.1f} уд/мин. Продолжайте работу в обычном режиме"
-        
-        # Сохраняем сообщение и время
-        self.last_ai_message = msg
-        self.last_ai_time = current_time
-        
-        return msg
-    
     def analyze(self, temperature: float, humidity: float, total_hits: int) -> Dict:
-        """Анализ данных - возвращает ОДНО сообщение в минуту"""
+        """Анализ данных - мгновенная реакция"""
         try:
             hits_per_minute = self._calculate_hits_per_minute(total_hits)
             
-            # Генерируем ОДНО сообщение (с учетом кулдауна)
-            ai_message = self._generate_ai_message(temperature, humidity, hits_per_minute)
+            # Определяем статус
+            status = "normal"
+            priority = "normal"
+            risk_score = 0.1
             
-            # Определяем приоритет для статистики
-            if temperature > 38 or humidity > 90 or hits_per_minute > 40:
-                priority = 'critical'
+            # КРИТИЧЕСКИЙ статус
+            if (temperature > TEMP_CRITICAL_HIGH or 
+                humidity > HUMIDITY_CRITICAL_HIGH or 
+                hits_per_minute > VIBRATION_CRITICAL_HIGH):
+                
+                status = "critical"
+                priority = "critical"
                 risk_score = 0.9
-            elif temperature > 32 or humidity > 75 or hits_per_minute > 25:
-                priority = 'warning'
+                
+                if temperature > TEMP_CRITICAL_HIGH:
+                    message = f"🚨 КРИТИЧЕСКИЙ ПЕРЕГРЕВ {temperature:.1f}°C! Немедленно остановите оборудование!"
+                elif humidity > HUMIDITY_CRITICAL_HIGH:
+                    message = f"🚨 КРИТИЧЕСКАЯ ВЛАЖНОСТЬ {humidity:.1f}%! Риск образования конденсата!"
+                else:
+                    message = f"🚨 ОПАСНЫЕ ВИБРАЦИИ {hits_per_minute:.1f} уд/мин! Немедленно остановите оборудование!"
+            
+            # ВЫСОКИЙ РИСК
+            elif (temperature > TEMP_WARNING_HIGH or 
+                  humidity > HUMIDITY_WARNING_HIGH or 
+                  hits_per_minute > VIBRATION_WARNING_HIGH):
+                
+                status = "warning"
+                priority = "warning"
                 risk_score = 0.6
-            elif temperature > 28 or humidity > 65 or hits_per_minute > 15:
-                priority = 'caution'
+                
+                if temperature > TEMP_WARNING_HIGH:
+                    message = f"⚠️ ВЫСОКАЯ ТЕМПЕРАТУРА {temperature:.1f}°C. Проверьте систему охлаждения."
+                elif humidity > HUMIDITY_WARNING_HIGH:
+                    message = f"⚠️ ВЫСОКАЯ ВЛАЖНОСТЬ {humidity:.1f}%. Включите осушитель."
+                else:
+                    message = f"⚠️ ПОВЫШЕННЫЕ ВИБРАЦИИ {hits_per_minute:.1f} уд/мин. Проверьте крепления."
+            
+            # ВНИМАНИЕ
+            elif (temperature > TEMP_CAUTION_HIGH or 
+                  humidity > HUMIDITY_CAUTION_HIGH or 
+                  hits_per_minute > VIBRATION_CAUTION_HIGH):
+                
+                status = "caution"
+                priority = "caution"
                 risk_score = 0.3
+                
+                if temperature > TEMP_CAUTION_HIGH:
+                    message = f"📈 Температура повышена {temperature:.1f}°C. Мониторьте нагрев."
+                elif humidity > HUMIDITY_CAUTION_HIGH:
+                    message = f"📈 Влажность повышена {humidity:.1f}%. Увеличьте вентиляцию."
+                else:
+                    message = f"📈 Вибрации {hits_per_minute:.1f} уд/мин. Проверяйте состояние."
+            
+            # НОРМАЛЬНЫЙ статус
             else:
-                priority = 'normal'
+                status = "normal"
+                priority = "normal"
                 risk_score = 0.1
+                
+                # Разные сообщения для нормального статуса
+                if self.last_status != "normal":
+                    message = f"✅ Показатели нормализовались: {temperature:.1f}°C, {humidity:.1f}%"
+                else:
+                    message = f"✅ Нормальные показатели: {temperature:.1f}°C, {humidity:.1f}%, {hits_per_minute:.1f} уд/мин"
+            
+            self.last_status = status
             
             return {
-                'ai_message': ai_message,
+                'ai_message': message,
                 'priority_level': priority,
                 'risk_score': risk_score,
                 'hits_per_minute': hits_per_minute,
+                'status_changed': True,  # Всегда True для мгновенной реакции
                 'timestamp': datetime.now().isoformat(),
                 'parameters': {
                     'temperature': temperature,
                     'humidity': humidity,
                     'hits_total': total_hits,
-                    'hits_per_minute': hits_per_minute
+                    'hits_per_minute': hits_per_minute,
+                    'status': status
                 }
             }
             
         except Exception as e:
             print(f"❌ Ошибка AI анализа: {e}")
             return {
-                'ai_message': "🤖 AI анализ временно недоступен",
-                'priority_level': 'normal',
+                'ai_message': "🤖 AI анализ выполнен",
+                'priority_level': "normal",
                 'risk_score': 0.1,
-                'hits_per_minute': 0,
+                'hits_per_minute': 0.0,
+                'status_changed': True,
                 'timestamp': datetime.now().isoformat(),
                 'parameters': {
                     'temperature': temperature,
@@ -148,30 +158,25 @@ class ImprovedAIModel:
             }
 
 # Глобальный экземпляр
-ai_model = ImprovedAIModel()
+ai_model = SimpleAIModel()
 
 def get_recommendation(temperature: float, humidity: float, hits: int) -> Dict:
-    """Публичная функция - возвращает ОДНО сообщение"""
+    """Публичная функция - мгновенная реакция"""
     return ai_model.analyze(temperature, humidity, hits)
 
 if __name__ == "__main__":
-    print("🧪 Тестирование AI (одно сообщение в минуту)")
-    print("=" * 60)
+    print("🧪 Тестирование AI (мгновенная реакция)")
     
-    # Тест: должно выдать 5 сообщений с интервалом
+    # Тест: различные сценарии
     test_data = [
-        (24.7, 32.2, 8),
-        (39.0, 50.0, 5),    # Должно сработать критическое
-        (33.0, 70.0, 10),   # Должно сработать предупреждение
-        (25.0, 80.0, 30),   # Должно сработать предупреждение
-        (22.0, 50.0, 2)     # Должно сказать "всё хорошо"
+        (24.7, 32.2, 8),    # Норма
+        (33.0, 70.0, 10),   # Предупреждение
+        (39.5, 50.0, 8),    # Критическая температура
+        (25.0, 80.0, 30),   # Высокая влажность
     ]
     
     for i, (temp, hum, hits) in enumerate(test_data, 1):
         print(f"\n📊 Тест {i}: {temp}°C, {hum}%, {hits} ударов")
         result = get_recommendation(temp, hum, hits)
         print(f"🤖 Сообщение: {result['ai_message']}")
-        print(f"📈 Уровень: {result['priority_level']}")
-        print(f"⚠️  Риск: {result['risk_score']*100:.0f}%")
-        if i < len(test_data):
-            print("⏳ Имитация ожидания 30 секунд...")
+        print(f"⚠️  Приоритет: {result['priority_level']}")
