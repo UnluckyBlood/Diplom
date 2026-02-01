@@ -1,15 +1,25 @@
 #include "DHT.h"
 
+// КОНСТАНТЫ ПИНОВ
 #define DHT_PIN 2
 #define MOTION_PIN 5
-#define TEMP_READ_INTERVAL 2000  // Чтение температуры каждые 2 сек
+
+// КОНСТАНТЫ ВРЕМЕНИ
+#define TEMP_READ_INTERVAL_MS 2000  // Чтение температуры каждые 2 секунды
+#define HIT_RESET_INTERVAL_MS 600000 // Сброс счетчика каждые 10 минут
+#define DEBOUNCE_DELAY_MS 50
+#define HOLD_DELAY_MS 10
+#define MAIN_LOOP_DELAY_MS 10
 
 DHT dht(DHT_PIN, DHT11);
 
+// ПЕРЕМЕННЫЕ ДЛЯ УДАРОВ
 unsigned long lastHitTime = 0;
 unsigned long timeBetweenHits = 0;
 unsigned long lastTempTime = 0;
 int hitCount = 0;
+
+// ПЕРЕМЕННЫЕ ДЛЯ ТЕМПЕРАТУРЫ
 float lastTemperature = 0;
 float lastHumidity = 0;
 
@@ -21,7 +31,7 @@ void setup() {
 }
 
 void loop() {
-  // Проверка на удары/вибрацию
+  // ОБРАБОТКА УДАРОВ/ВИБРАЦИИ
   if (digitalRead(MOTION_PIN) == LOW) {
     unsigned long currentTime = millis();
     
@@ -29,7 +39,7 @@ void loop() {
       timeBetweenHits = currentTime - lastHitTime;
       hitCount++;
       
-      // Отправляем данные об ударе в правильном формате
+      // Отправляем данные об ударе
       Serial.print("HIT:");
       Serial.print(timeBetweenHits);
       Serial.print(",COUNT:");
@@ -40,26 +50,26 @@ void loop() {
     lastHitTime = currentTime;
     
     // Антидребезг
-    delay(50);
+    delay(DEBOUNCE_DELAY_MS);
     while(digitalRead(MOTION_PIN) == LOW) {
-      delay(10);
+      delay(HOLD_DELAY_MS);
     }
   }
   
-  // Чтение температуры и влажности
-  if (millis() - lastTempTime >= TEMP_READ_INTERVAL) {
-    float h = dht.readHumidity();
-    float t = dht.readTemperature();
+  // ЧТЕНИЕ ТЕМПЕРАТУРЫ И ВЛАЖНОСТИ
+  if (millis() - lastTempTime >= TEMP_READ_INTERVAL_MS) {
+    float humidity = dht.readHumidity();
+    float temperature = dht.readTemperature();
     
-    if (!isnan(h) && !isnan(t)) {
-      lastTemperature = t;
-      lastHumidity = h;
+    if (!isnan(humidity) && !isnan(temperature)) {
+      lastTemperature = temperature;
+      lastHumidity = humidity;
       
       // Отправляем данные в формате для Python
       Serial.print("TEMP:");
-      Serial.print(t, 1);
+      Serial.print(temperature, 1);
       Serial.print(",HUM:");
-      Serial.print(h, 1);
+      Serial.print(humidity, 1);
       Serial.print(",HIT_COUNT:");
       Serial.print(hitCount);
       Serial.println();
@@ -69,11 +79,11 @@ void loop() {
     
     lastTempTime = millis();
     
-    // Сброс счетчика ударов каждые 10 минут
-    if (millis() > 600000) { // 10 минут
+    // СБРОС СЧЕТЧИКА УДАРОВ
+    if (millis() > HIT_RESET_INTERVAL_MS) {
       hitCount = 0;
     }
   }
   
-  delay(10); // Небольшая пауза для стабильности
+  delay(MAIN_LOOP_DELAY_MS);
 }

@@ -3,458 +3,635 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Arduino Monitoring System with AI</title>
+    <title>Пром Мониторинг</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Arial, sans-serif; }
-        
-        body { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #333; min-height: 100vh; padding: 20px; }
-        
-        .container { max-width: 1400px; margin: 0 auto; }
-        
-        .header { background: rgba(255, 255, 255, 0.95); padding: 20px; border-radius: 15px; margin-bottom: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); display: flex; justify-content: space-between; align-items: center; }
-        
-        .header h1 { color: #2d3436; font-size: 28px; }
-        
-        .header h1 i { color: #667eea; margin-right: 10px; }
-        
-        .status-badge { padding: 10px 20px; background: #00b894; color: white; border-radius: 50px; font-weight: bold; display: flex; align-items: center; gap: 10px; }
-        
-        .dashboard-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
-        
-        .main-panel { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
-        
-        .card { background: rgba(255, 255, 255, 0.95); border-radius: 15px; padding: 25px; box-shadow: 0 8px 25px rgba(0,0,0,0.1); transition: transform 0.3s; }
-        
-        .card:hover { transform: translateY(-5px); }
-        
-        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #f1f2f6; }
-        
-        .card-title { font-size: 20px; color: #2d3436; display: flex; align-items: center; gap: 10px; }
-        
-        .value { font-size: 48px; font-weight: bold; color: #667eea; margin: 10px 0; }
-        
-        .unit { font-size: 20px; color: #636e72; margin-left: 5px; }
-        
-        .sub-value { color: #636e72; font-size: 16px; margin-top: 5px; }
-        
-        .ai-chat { grid-column: span 2; min-height: 400px; display: flex; flex-direction: column; }
-        
-        .chat-messages { flex: 1; overflow-y: auto; padding: 15px; background: #f8f9fa; border-radius: 10px; margin: 15px 0; max-height: 300px; }
-        
-        .message { padding: 12px 15px; margin-bottom: 10px; border-radius: 10px; animation: fadeIn 0.3s; }
-        
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        
-        .message.info { background: #e3f2fd; border-left: 4px solid #2196f3; }
-        .message.warning { background: #fff3cd; border-left: 4px solid #ff9800; }
-        .message.danger { background: #f8d7da; border-left: 4px solid #dc3545; }
-        .message.success { background: #d4edda; border-left: 4px solid #28a745; }
-        
-        .message-time { font-size: 12px; color: #888; margin-top: 5px; text-align: right; }
-        
-        .controls { display: flex; gap: 10px; margin-top: 15px; }
-        
-        .btn { padding: 12px 20px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; display: flex; align-items: center; gap: 8px; transition: all 0.3s; }
-        
-        .btn-primary { background: #667eea; color: white; }
-        .btn-primary:hover { background: #5a6fd8; }
-        
-        .btn-success { background: #00b894; color: white; }
-        .btn-success:hover { background: #00a085; }
-        
-        @media (max-width: 1200px) { .dashboard-grid { grid-template-columns: 1fr; } }
-        @media (max-width: 768px) { .main-panel { grid-template-columns: 1fr; } .ai-chat { grid-column: span 1; } .value { font-size: 36px; } }
-    </style>
+    <link rel="stylesheet" href="static/css/style.css">
 </head>
 <body>
     <div class="container">
-        <div class="header">
-            <h1><i class="fas fa-microchip"></i> Arduino Monitoring System with AI</h1>
-            <div class="status-badge">
-                <i class="fas fa-circle" id="statusIcon"></i>
-                <span id="statusText">Подключение...</span>
+        <!-- Навигация -->
+        <nav class="navbar">
+            <div class="logo">
+                <i class="fas fa-industry"></i>
+                <span>Пром Мониторинг</span>
             </div>
-        </div>
-        
-        <div class="dashboard-grid">
-            <div class="main-panel">
-                <!-- Температура -->
-                <div class="card">
-                    <div class="card-header">
-                        <div class="card-title">
-                            <i class="fas fa-thermometer-half" style="color: #e17055;"></i>
-                            Температура
+            <div class="nav-links">
+                <a href="#" class="nav-link active" onclick="showPage('dashboard')">Главная</a>
+                <a href="#" class="nav-link" onclick="showPage('settings')">Настройки</a>
+                <a href="#" class="nav-link" onclick="showPage('export')">Экспорт</a>
+                <a href="#" class="nav-link" onclick="showPage('upload')">Загрузка</a>
+                <a href="#" class="nav-link" onclick="showPage('profile')">Профиль</a>
+            </div>
+            <div class="user-menu">
+                <span id="userName">Иван Петров</span>
+                <i class="fas fa-user-circle" style="font-size: 24px;"></i>
+            </div>
+        </nav>
+
+        <!-- Главная страница -->
+        <div id="dashboard" class="page active">
+            <div class="page-header">
+                <h1><i class="fas fa-tools"></i> Управление оборудованием</h1>
+                <p>Список подключенного промышленного оборудования</p>
+            </div>
+            
+            <div class="equipment-list">
+                <!-- Станок №1 -->
+                <div class="equipment-card">
+                    <div class="equipment-header">
+                        <h3><i class="fas fa-server"></i> Станок №1</h3>
+                        <div class="equipment-status">
+                            <i class="fas fa-circle" style="color: #00b894;"></i>
+                            <span>Активен</span>
                         </div>
                     </div>
-                    <div class="value" id="temperature">--</div>
-                    <div class="unit">°C</div>
-                    <div class="sub-value" id="tempStatus">Статус: --</div>
+                    <div class="equipment-info">
+                        <div class="equipment-info-item">
+                            <strong>Тип:</strong> Фрезерный станок
+                        </div>
+                        <div class="equipment-info-item">
+                            <strong>Место:</strong> Цех А, участок 1
+                        </div>
+                        <div class="equipment-info-item">
+                            <strong>COM-порт:</strong> 192.168.1.101
+                        </div>
+                    </div>
+                    <button class="btn" onclick="configureEquipment(1)">Настроить</button>
+                </div>
+                
+                <!-- Станок №2 -->
+                <div class="equipment-card">
+                    <div class="equipment-header">
+                        <h3><i class="fas fa-server"></i> Станок №2</h3>
+                        <div class="equipment-status">
+                            <i class="fas fa-circle" style="color: #00b894;"></i>
+                            <span>Активен</span>
+                        </div>
+                    </div>
+                    <div class="equipment-info">
+                        <div class="equipment-info-item">
+                            <strong>Тип:</strong> Токарный станок
+                        </div>
+                        <div class="equipment-info-item">
+                            <strong>Место:</strong> Цех А, участок 2
+                        </div>
+                        <div class="equipment-info-item">
+                            <strong>COM-порт:</strong> 192.168.1.102
+                        </div>
+                    </div>
+                    <button class="btn" onclick="configureEquipment(2)">Настроить</button>
+                </div>
+                
+                <!-- Пресс №1 -->
+                <div class="equipment-card">
+                    <div class="equipment-header">
+                        <h3><i class="fas fa-server"></i> Пресс №1</h3>
+                        <div class="equipment-status">
+                            <i class="fas fa-circle" style="color: #e17055;"></i>
+                            <span>Неактивен</span>
+                        </div>
+                    </div>
+                    <div class="equipment-info">
+                        <div class="equipment-info-item">
+                            <strong>Тип:</strong> Гидравлический пресс
+                        </div>
+                        <div class="equipment-info-item">
+                            <strong>Место:</strong> Цех Б, участок 1
+                        </div>
+                        <div class="equipment-info-item">
+                            <strong>COM-порт:</strong> 192.168.1.103
+                        </div>
+                    </div>
+                    <button class="btn" onclick="configureEquipment(3)">Настроить</button>
+                </div>
+            </div>
+
+            <!-- Датчики мониторинга -->
+            <div class="page-header" style="margin-top: 40px;">
+                <h1><i class="fas fa-microchip"></i> Мониторинг в реальном времени</h1>
+            </div>
+            
+            <div class="sensors-grid">
+                <!-- Температура -->
+                <div class="sensor-card">
+                    <div class="sensor-header">
+                        <div class="sensor-title">
+                            <i class="fas fa-thermometer-half" style="color: #e17055;"></i>
+                            <span>Температура</span>
+                        </div>
+                        <div class="sensor-status">
+                            <i class="fas fa-circle" id="tempStatusIcon" style="color: #00b894;"></i>
+                        </div>
+                    </div>
+                    <div class="sensor-value" id="temperature">--</div>
+                    <div class="sensor-unit">°C</div>
+                    <div class="sensor-desc" id="tempStatus">Статус: Норма</div>
                 </div>
                 
                 <!-- Влажность -->
-                <div class="card">
-                    <div class="card-header">
-                        <div class="card-title">
+                <div class="sensor-card">
+                    <div class="sensor-header">
+                        <div class="sensor-title">
                             <i class="fas fa-tint" style="color: #0984e3;"></i>
-                            Влажность
+                            <span>Влажность</span>
+                        </div>
+                        <div class="sensor-status">
+                            <i class="fas fa-circle" id="humStatusIcon" style="color: #00b894;"></i>
                         </div>
                     </div>
-                    <div class="value" id="humidity">--</div>
-                    <div class="unit">%</div>
-                    <div class="sub-value" id="humStatus">Статус: --</div>
+                    <div class="sensor-value" id="humidity">--</div>
+                    <div class="sensor-unit">%</div>
+                    <div class="sensor-desc" id="humStatus">Статус: Норма</div>
                 </div>
                 
                 <!-- Вибрации -->
-                <div class="card">
-                    <div class="card-header">
-                        <div class="card-title">
+                <div class="sensor-card">
+                    <div class="sensor-header">
+                        <div class="sensor-title">
                             <i class="fas fa-vibrate" style="color: #00b894;"></i>
-                            Вибрации
+                            <span>Вибрации</span>
+                        </div>
+                        <div class="sensor-status">
+                            <i class="fas fa-circle" id="vibStatusIcon" style="color: #00b894;"></i>
                         </div>
                     </div>
-                    <div class="value" id="vibrations">0</div>
-                    <div class="unit">уд/мин</div>
-                    <div class="sub-value">Всего ударов: <span id="totalHits">0</span></div>
+                    <div class="sensor-value" id="vibrations">0</div>
+                    <div class="sensor-unit">уд/мин</div>
+                    <div class="sensor-desc">Всего ударов: <span id="totalHits">0</span></div>
                 </div>
                 
                 <!-- Риск -->
-                <div class="card">
-                    <div class="card-header">
-                        <div class="card-title">
+                <div class="sensor-card">
+                    <div class="sensor-header">
+                        <div class="sensor-title">
                             <i class="fas fa-exclamation-triangle" style="color: #d63031;"></i>
-                            Риск отказа
+                            <span>Риск отказа</span>
+                        </div>
+                        <div class="sensor-status">
+                            <i class="fas fa-circle" id="riskStatusIcon" style="color: #00b894;"></i>
                         </div>
                     </div>
-                    <div class="value" id="riskScore">0%</div>
-                    <div class="sub-value" id="riskLevel">Уровень: Низкий</div>
+                    <div class="sensor-value" id="riskScore">0%</div>
+                    <div class="sensor-desc" id="riskLevel">Уровень: Низкий</div>
+                </div>
+            </div>
+
+            <!-- Графики -->
+            <div class="charts-section">
+                <div class="section-header">
+                    <h2><i class="fas fa-chart-line"></i> Графики (последние 60 минут)</h2>
+                    <button class="btn btn-sm" onclick="refreshCharts()">
+                        <i class="fas fa-sync"></i> Обновить
+                    </button>
                 </div>
                 
-                <!-- AI Чат (ОДНО сообщение) -->
-                <div class="card ai-chat">
-                    <div class="card-header">
-                        <div class="card-title">
-                            <i class="fas fa-robot" style="color: #6c5ce7;"></i>
-                            AI Рекомендации (одно в минуту)
+                <div class="charts-grid">
+                    <!-- Температура -->
+                    <div class="chart-container">
+                        <div class="chart-title">
+                            <i class="fas fa-thermometer-half" style="color: #e17055;"></i>
+                            Температура (°C)
                         </div>
-                        <button class="btn btn-primary" onclick="loadAIChat()">
-                            <i class="fas fa-sync"></i> Обновить
-                        </button>
-                    </div>
-                    
-                    <div class="chat-messages" id="aiChat">
-                        <div class="message info">
-                            <div>🤖 AI система ожидает данных...</div>
-                            <div class="message-time">Загружено</div>
+                        <div class="chart-wrapper">
+                            <canvas id="tempChart"></canvas>
                         </div>
                     </div>
                     
-                    <div class="controls">
-                        <button class="btn btn-success" onclick="simulateWarning()">
-                            <i class="fas fa-bell"></i> Тест предупреждения
-                        </button>
-                        <button class="btn btn-primary" onclick="showHistory()">
-                            <i class="fas fa-history"></i> История
+                    <!-- Влажность -->
+                    <div class="chart-container">
+                        <div class="chart-title">
+                            <i class="fas fa-tint" style="color: #0984e3;"></i>
+                            Влажность (%)
+                        </div>
+                        <div class="chart-wrapper">
+                            <canvas id="humChart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <!-- Вибрации -->
+                    <div class="chart-container">
+                        <div class="chart-title">
+                            <i class="fas fa-vibrate" style="color: #00b894;"></i>
+                            Вибрации (уд/мин)
+                        </div>
+                        <div class="chart-wrapper">
+                            <canvas id="vibChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="chart-controls" style="margin-top: 15px; display: flex; gap: 10px;">
+                    <button class="btn btn-sm" onclick="zoomChart('out')">
+                        <i class="fas fa-search-minus"></i> Уменьшить
+                    </button>
+                    <button class="btn btn-sm" onclick="zoomChart('in')">
+                        <i class="fas fa-search-plus"></i> Увеличить
+                    </button>
+                    <button class="btn btn-sm" onclick="resetChartZoom()">
+                        <i class="fas fa-expand-arrows-alt"></i> Сбросить
+                    </button>
+                </div>
+            </div>
+
+            <!-- AI Чат -->
+            <div class="ai-chat-section">
+                <div class="section-header">
+                    <h2><i class="fas fa-robot"></i> AI Ассистент</h2>
+                </div>
+                
+                <div class="chat-container">
+                    <div class="chat-messages" id="aiChatFull">
+                        <div class="message ai">
+                            <div class="message-content">
+                                <div class="message-sender">AI:</div>
+                                <div class="message-text">Здравствуйте! Я ваш AI ассистент для промышленного мониторинга. Чем могу помочь?</div>
+                            </div>
+                            <div class="message-time">Только что</div>
+                        </div>
+                    </div>
+                    
+                    <div class="chat-input">
+                        <input type="text" id="userInput" placeholder="Введите ваш вопрос или команду для AI ассистента...">
+                        <button class="btn" onclick="sendUserMessage()">
+                            <i class="fas fa-paper-plane"></i> Отправить
                         </button>
                     </div>
                 </div>
             </div>
+        </div>
+
+        <!-- Страница настройки параметров -->
+        <div id="settings" class="page">
+            <div class="page-header">
+                <h1><i class="fas fa-sliders-h"></i> Настройка параметров</h1>
+                <p>Установите пороговые значения для мониторинга оборудования</p>
+            </div>
             
-            <!-- Боковая панель -->
-            <div class="card">
-                <div class="card-header">
-                    <div class="card-title">
-                        <i class="fas fa-chart-line"></i>
-                        Система
+            <div class="settings-grid">
+                <!-- Температура -->
+                <div class="parameter-group">
+                    <div class="parameter-header">
+                        <h3><i class="fas fa-thermometer-half"></i> Температура (°C)</h3>
+                    </div>
+                    <div class="parameter-controls">
+                        <div class="parameter-item">
+                            <label class="parameter-label">Минимальное значение:</label>
+                            <input type="number" class="parameter-input" value="20" min="-50" max="150">
+                            <span class="parameter-unit">°C</span>
+                        </div>
+                        <div class="parameter-item">
+                            <label class="parameter-label">Максимальное значение:</label>
+                            <input type="number" class="parameter-input" value="75" min="-50" max="150">
+                            <span class="parameter-unit">°C</span>
+                        </div>
+                        <div class="parameter-item">
+                            <label class="parameter-label">Критическое значение:</label>
+                            <input type="number" class="parameter-input" value="80" min="-50" max="150">
+                            <span class="parameter-unit">°C</span>
+                        </div>
+                    </div>
+                    <div class="parameter-summary">
+                        <p><strong>Норма:</strong> <span id="tempNormal">20 - 75 °C</span></p>
+                        <p><strong>Повышенная:</strong> <span id="tempHigh">75 + °C</span></p>
+                        <p><strong>Опасно:</strong> <span id="tempCritical">80 + °C</span></p>
                     </div>
                 </div>
                 
-                <div class="sub-value">Последнее обновление: <span id="lastUpdate">--:--:--</span></div>
-                <div class="sub-value">AI статус: <span id="aiStatus">Загрузка...</span></div>
-                <div class="sub-value">Следующее AI сообщение: <span id="nextAiMessage">60 сек</span></div>
+                <!-- Давление -->
+                <div class="parameter-group">
+                    <div class="parameter-header">
+                        <h3><i class="fas fa-tachometer-alt"></i> Давление (бар)</h3>
+                    </div>
+                    <div class="parameter-controls">
+                        <div class="parameter-item">
+                            <label class="parameter-label">Минимальное значение:</label>
+                            <input type="number" class="parameter-input" value="5" min="0" max="100">
+                            <span class="parameter-unit">bar</span>
+                        </div>
+                        <div class="parameter-item">
+                            <label class="parameter-label">Максимальное значение:</label>
+                            <input type="number" class="parameter-input" value="10" min="0" max="100">
+                            <span class="parameter-unit">bar</span>
+                        </div>
+                        <div class="parameter-item">
+                            <label class="parameter-label">Критическое значение:</label>
+                            <input type="number" class="parameter-input" value="12" min="0" max="100">
+                            <span class="parameter-unit">bar</span>
+                        </div>
+                    </div>
+                    <div class="parameter-summary">
+                        <p><strong>Норма:</strong> <span id="pressureNormal">5 - 10 бар</span></p>
+                        <p><strong>Повышенная:</strong> <span id="pressureHigh">10 + бар</span></p>
+                        <p><strong>Опасно:</strong> <span id="pressureCritical">12 + бар</span></p>
+                    </div>
+                </div>
                 
-                <div class="controls" style="margin-top: 20px;">
-                    <button class="btn btn-primary" onclick="manualAiCheck()">
-                        <i class="fas fa-robot"></i> Проверить сейчас
+                <!-- Вибрация -->
+                <div class="parameter-group">
+                    <div class="parameter-header">
+                        <h3><i class="fas fa-vibrate"></i> Вибрация (мм/с)</h3>
+                    </div>
+                    <div class="parameter-controls">
+                        <div class="parameter-item">
+                            <label class="parameter-label">Минимальное значение:</label>
+                            <input type="number" class="parameter-input" value="0" min="0" max="50">
+                            <span class="parameter-unit">mm/s</span>
+                        </div>
+                        <div class="parameter-item">
+                            <label class="parameter-label">Максимальное значение:</label>
+                            <input type="number" class="parameter-input" value="6" min="0" max="50">
+                            <span class="parameter-unit">mm/s</span>
+                        </div>
+                        <div class="parameter-item">
+                            <label class="parameter-label">Критическое значение:</label>
+                            <input type="number" class="parameter-input" value="8" min="0" max="50">
+                            <span class="parameter-unit">mm/s</span>
+                        </div>
+                    </div>
+                    <div class="parameter-summary">
+                        <p><strong>Норма:</strong> <span id="vibNormal">0 - 6 мм/с</span></p>
+                        <p><strong>Повышенная:</strong> <span id="vibHigh">6 + мм/с</span></p>
+                        <p><strong>Опасно:</strong> <span id="vibCritical">8 + мм/с</span></p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="settings-actions">
+                <button class="btn btn-success" onclick="saveSettings()">
+                    <i class="fas fa-save"></i> Сохранить изменения
+                </button>
+                <button class="btn" onclick="resetSettings()">
+                    <i class="fas fa-undo"></i> Сбросить
+                </button>
+            </div>
+        </div>
+
+        <!-- Страница экспорта -->
+        <div id="export" class="page">
+            <div class="page-header">
+                <h1><i class="fas fa-download"></i> Экспорт данных</h1>
+                <p>Выгрузка данных мониторинга в различных форматах</p>
+            </div>
+            
+            <div class="export-form">
+                <div class="form-group">
+                    <label><i class="far fa-calendar"></i> Период данных</label>
+                    <div class="date-range">
+                        <div class="date-input">
+                            <label>Дата начала</label>
+                            <input type="date" id="startDate" class="form-control" value="2025-11-14">
+                        </div>
+                        <div class="date-input">
+                            <label>Дата окончания</label>
+                            <input type="date" id="endDate" class="form-control" value="2025-11-14">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label><i class="fas fa-sliders-h"></i> Параметры для экспорта</label>
+                    <div class="checkbox-group">
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="expTemp" checked>
+                            <label for="expTemp">Температура</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="expPressure" checked>
+                            <label for="expPressure">Давление</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="expVibration" checked>
+                            <label for="expVibration">Вибрация</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="expHumidity" checked>
+                            <label for="expHumidity">Влажность</label>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label><i class="fas fa-server"></i> Оборудование</label>
+                    <select id="exportEquipment" class="form-control">
+                        <option value="all">Все оборудование</option>
+                        <option value="1">Станок №1</option>
+                        <option value="2">Станок №2</option>
+                        <option value="3">Пресс №1</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label><i class="fas fa-file-export"></i> Формат файла</label>
+                    <div class="radio-group">
+                        <div class="radio-item">
+                            <input type="radio" id="formatCsv" name="format" value="csv" checked>
+                            <label for="formatCsv">CSV (Comma Separated Values)</label>
+                        </div>
+                        <div class="radio-item">
+                            <input type="radio" id="formatExcel" name="format" value="excel">
+                            <label for="formatExcel">Excel (XLSX)</label>
+                        </div>
+                        <div class="radio-item">
+                            <input type="radio" id="formatJson" name="format" value="json">
+                            <label for="formatJson">JSON</label>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="export-actions">
+                    <button class="btn btn-success" onclick="exportData()">
+                        <i class="fas fa-download"></i> Экспортировать данные
                     </button>
-                    <button class="btn" onclick="showSettings()">
-                        <i class="fas fa-cog"></i> Настройки
+                    <button class="btn" onclick="previewExport()">
+                        <i class="fas fa-eye"></i> Предварительный просмотр
                     </button>
                 </div>
             </div>
         </div>
+
+        <!-- Страница загрузки -->
+        <div id="upload" class="page">
+            <div class="page-header">
+                <h1><i class="fas fa-upload"></i> Загрузка данных</h1>
+                <p>Загрузите CSV файл с данными мониторинга оборудования</p>
+            </div>
+            
+            <div class="upload-form">
+                <div class="form-group">
+                    <label><i class="fas fa-server"></i> Выберите оборудование для загрузки данных</label>
+                    <select id="uploadEquipment" class="form-control">
+                        <option>Выберите оборудование</option>
+                        <option>Станок №1</option>
+                        <option>Станок №2</option>
+                        <option>Пресс №1</option>
+                    </select>
+                </div>
+                
+                <div class="upload-area" id="dropZone" ondrop="handleDrop(event)" ondragover="handleDragOver(event)">
+                    <div class="upload-icon">
+                        <i class="fas fa-file-upload"></i>
+                    </div>
+                    <h3>Перетащите CSV файл сюда или выберите файл</h3>
+                    <p class="upload-hint">Поддерживаются файлы формата CSV с данными мониторинга</p>
+                    <input type="file" id="fileInput" accept=".csv" style="display: none;" onchange="handleFileSelect(event)">
+                    <button class="btn" onclick="document.getElementById('fileInput').click()">
+                        <i class="fas fa-folder-open"></i> Выбрать файл
+                    </button>
+                    <div id="fileInfo" class="file-info"></div>
+                </div>
+                
+                <div class="upload-instructions">
+                    <h4><i class="fas fa-info-circle"></i> Формат CSV файла</h4>
+                    <p>CSV файл должен содержать следующие колонки:</p>
+                    <pre><code>timestamp, temperature, humidity, hits_per_minute, hit_count
+
+2025-01-01 10:00:00,72.4,45.2,12.5,1250
+2025-01-01 10:01:00,72.6,45.1,12.8,1252
+2025-01-01 10:02:00,72.3,45.3,12.3,1254</code></pre>
+                </div>
+                
+                <div class="upload-actions">
+                    <button class="btn btn-success" onclick="uploadFile()" id="uploadBtn" disabled>
+                        <i class="fas fa-upload"></i> Загрузить данные
+                    </button>
+                    <button class="btn" onclick="clearUpload()">
+                        <i class="fas fa-times"></i> Очистить
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Страница профиля -->
+        <div id="profile" class="page">
+            <div class="page-header">
+                <h1><i class="fas fa-user-circle"></i> Личный кабинет</h1>
+                <p>Управление профилем и настройками аккаунта</p>
+            </div>
+            
+            <div class="profile-container">
+                <div class="profile-sidebar">
+                    <div class="profile-avatar">
+                        <i class="fas fa-user-circle"></i>
+                        <h2 id="profileName">Иван Петров</h2>
+                        <p class="profile-role" id="profileRole">Инженер по оборудованию</p>
+                    </div>
+                    
+                    <div class="profile-stats">
+                        <div class="stat-item">
+                            <div class="stat-label">Активных станков</div>
+                            <div class="stat-value">2</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">Дней работы</div>
+                            <div class="stat-value">45</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">Всего оповещений</div>
+                            <div class="stat-value">12</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="profile-content">
+                    <div class="profile-section">
+                        <h3><i class="fas fa-user-edit"></i> Информация о пользователе</h3>
+                        
+                        <div class="profile-form">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Полное имя</label>
+                                    <input type="text" id="fullName" class="form-control" value="Иван Петров">
+                                </div>
+                                <div class="form-group">
+                                    <label>Email</label>
+                                    <input type="email" id="email" class="form-control" value="ivan.petrov@company.ru">
+                                </div>
+                            </div>
+                            
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Телефон</label>
+                                    <input type="tel" id="phone" class="form-control" value="+7 (495) 123-45-67">
+                                </div>
+                                <div class="form-group">
+                                    <label>Отдел</label>
+                                    <select id="department" class="form-control">
+                                        <option>Производственный отдел</option>
+                                        <option>Технический отдел</option>
+                                        <option>Отдел контроля качества</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Должность</label>
+                                    <input type="text" id="position" class="form-control" value="Инженер по оборудованию">
+                                </div>
+                                <div class="form-group">
+                                    <label>Дата начала работы</label>
+                                    <input type="date" id="startDate" class="form-control" value="2025-01-15">
+                                </div>
+                            </div>
+                            
+                            <div class="profile-actions">
+                                <button class="btn btn-success" onclick="saveProfile()">
+                                    <i class="fas fa-save"></i> Сохранить изменения
+                                </button>
+                                <button class="btn" onclick="resetProfile()">
+                                    <i class="fas fa-undo"></i> Сбросить
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="profile-section">
+                        <h3><i class="fas fa-bell"></i> Настройки уведомлений</h3>
+                        <div class="notification-settings">
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="notifyEmail" checked>
+                                <label for="notifyEmail">Email уведомления</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="notifySms" checked>
+                                <label for="notifySms">SMS уведомления</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="notifyCritical" checked>
+                                <label for="notifyCritical">Критические оповещения</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="notifyWarnings">
+                                <label for="notifyWarnings">Предупреждения</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Футер -->
+        <div class="footer">
+            <div class="footer-section">
+                <h4><i class="fas fa-info-circle"></i> Пром Мониторинг</h4>
+                <p>Система промышленного мониторинга для предотвращения простоя оборудования</p>
+            </div>
+            
+            <div class="footer-section">
+                <h4><i class="fas fa-address-book"></i> Контакты</h4>
+                <p>Email: info@prommonitoring.ru</p>
+                <p>Телефон: +7 (495) 123-45-67</p>
+            </div>
+            
+            <div class="footer-section">
+                <h4><i class="fas fa-headset"></i> Поддержка</h4>
+                <p>Техническая поддержка</p>
+                <p>Документация</p>
+            </div>
+        </div>
     </div>
-    
-    <script>
-        let ws;
-        let aiMessageTimer = 60;
-        
-        // WebSocket
-        function initWebSocket() {
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsUrl = `${protocol}//${window.location.host}/ws`;
-            
-            ws = new WebSocket(wsUrl);
-            
-            ws.onopen = function() {
-                updateStatus(true);
-                console.log('✅ WebSocket подключен');
-                loadInitialData();
-            };
-            
-            ws.onmessage = function(event) {
-                try {
-                    const data = JSON.parse(event.data);
-                    handleWebSocketMessage(data);
-                } catch (e) {
-                    console.error('Ошибка:', e);
-                }
-            };
-            
-            ws.onclose = function() {
-                updateStatus(false);
-                setTimeout(initWebSocket, 3000);
-            };
-        }
-        
-        function updateStatus(connected) {
-            const icon = document.getElementById('statusIcon');
-            const text = document.getElementById('statusText');
-            
-            if (connected) {
-                icon.style.color = '#00b894';
-                text.textContent = 'Подключено';
-            } else {
-                icon.style.color = '#e17055';
-                text.textContent = 'Отключено';
-            }
-        }
-        
-        function handleWebSocketMessage(data) {
-            document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
-            
-            if (data.type === 'realtime') {
-                updateDashboard(data.data);
-            } else if (data.type === 'ai_recommendation') {
-                addChatMessage(data.data);
-            }
-        }
-        
-        function updateDashboard(data) {
-            // Температура
-            if (data.temperature !== undefined) {
-                const temp = data.temperature.toFixed(1);
-                document.getElementById('temperature').textContent = temp;
-                
-                let tempStatus = 'Норма';
-                if (data.temperature > 35) tempStatus = 'Критично';
-                else if (data.temperature > 30) tempStatus = 'Повышена';
-                else if (data.temperature < 15) tempStatus = 'Низкая';
-                
-                document.getElementById('tempStatus').textContent = `Статус: ${tempStatus}`;
-            }
-            
-            // Влажность
-            if (data.humidity !== undefined) {
-                const hum = data.humidity.toFixed(1);
-                document.getElementById('humidity').textContent = hum;
-                
-                let humStatus = 'Норма';
-                if (data.humidity > 80) humStatus = 'Высокая';
-                else if (data.humidity > 60) humStatus = 'Повышена';
-                else if (data.humidity < 20) humStatus = 'Низкая';
-                
-                document.getElementById('humStatus').textContent = `Статус: ${humStatus}`;
-            }
-            
-            // Вибрации
-            if (data.hits_per_minute !== undefined) {
-                const hits = parseFloat(data.hits_per_minute);
-                document.getElementById('vibrations').textContent = hits.toFixed(1);
-                
-                // Обновляем риск
-                updateRiskFromHits(hits);
-            }
-            
-            // Общее количество ударов
-            if (data.hit_count !== undefined) {
-                document.getElementById('totalHits').textContent = data.hit_count;
-            }
-        }
-        
-        function updateRiskFromHits(hitsPerMinute) {
-            let riskPercent, riskLevel;
-            
-            if (hitsPerMinute > 30) {
-                riskPercent = 90;
-                riskLevel = 'Критический';
-            } else if (hitsPerMinute > 20) {
-                riskPercent = 70;
-                riskLevel = 'Высокий';
-            } else if (hitsPerMinute > 10) {
-                riskPercent = 50;
-                riskLevel = 'Средний';
-            } else if (hitsPerMinute > 5) {
-                riskPercent = 30;
-                riskLevel = 'Низкий';
-            } else {
-                riskPercent = 10;
-                riskLevel = 'Минимальный';
-            }
-            
-            document.getElementById('riskScore').textContent = `${riskPercent}%`;
-            document.getElementById('riskLevel').textContent = `Уровень: ${riskLevel}`;
-        }
-        
-        function loadInitialData() {
-            fetch('/api/current')
-                .then(r => r.json())
-                .then(data => {
-                    updateDashboard(data);
-                    document.getElementById('aiStatus').textContent = 'Активен';
-                    document.getElementById('aiStatus').style.color = '#00b894';
-                })
-                .catch(err => {
-                    console.error('Ошибка:', err);
-                    document.getElementById('aiStatus').textContent = 'Ошибка';
-                    document.getElementById('aiStatus').style.color = '#e17055';
-                });
-            
-            loadAIChat();
-        }
-        
-        function loadAIChat() {
-            fetch('/api/ai/recommendations?limit=5')
-                .then(r => r.json())
-                .then(data => {
-                    const chatDiv = document.getElementById('aiChat');
-                    chatDiv.innerHTML = '';
-                    
-                    if (!Array.isArray(data) || data.length === 0) {
-                        chatDiv.innerHTML = '<div class="message info">🤖 AI рекомендаций пока нет</div>';
-                        return;
-                    }
-                    
-                    // Показываем только последние 3 сообщения
-                    data.slice(0, 3).forEach(msg => {
-                        addChatMessage(msg, false);
-                    });
-                })
-                .catch(err => {
-                    console.error('Ошибка:', err);
-                });
-        }
-        
-        function addChatMessage(message, scroll = true) {
-            const chatDiv = document.getElementById('aiChat');
-            const messageDiv = document.createElement('div');
-            
-            // Определяем тип
-            let messageType = message.type || 'info';
-            const msgText = message.message || "";
-            
-            if (msgText.includes('🔴') || msgText.includes('КРИТИЧЕСКИЙ')) {
-                messageType = 'danger';
-            } else if (msgText.includes('🟠') || msgText.includes('ВЫСОКАЯ') || msgText.includes('ПОВЫШЕННЫЕ')) {
-                messageType = 'warning';
-            } else if (msgText.includes('🟡') || msgText.includes('ПОВЫШЕНА') || msgText.includes('ВНИМАНИЕ')) {
-                messageType = 'warning';
-            } else if (msgText.includes('✅') || msgText.includes('ХОРОШО') || msgText.includes('ИДЕАЛЬНЫЕ')) {
-                messageType = 'success';
-            }
-            
-            messageDiv.className = `message ${messageType}`;
-            
-            const time = new Date(message.timestamp || new Date());
-            const timeStr = time.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-            
-            messageDiv.innerHTML = `
-                <div style="font-size: 14px; line-height: 1.4;">${msgText}</div>
-                <div class="message-time">${timeStr}</div>
-            `;
-            
-            // Добавляем в начало (новые сверху)
-            chatDiv.insertBefore(messageDiv, chatDiv.firstChild);
-            
-            // Ограничиваем 3 сообщения
-            while (chatDiv.children.length > 3) {
-                chatDiv.removeChild(chatDiv.lastChild);
-            }
-            
-            if (scroll) {
-                chatDiv.scrollTop = 0;
-            }
-        }
-        
-        function simulateWarning() {
-            fetch('/api/ai/add_recommendation', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    timestamp: new Date().toISOString(),
-                    message: '⚠️ ТЕСТОВОЕ ПРЕДУПРЕЖДЕНИЕ: Проверка системы мониторинга работает корректно',
-                    type: 'warning'
-                })
-            })
-            .then(() => {
-                alert('✅ Тест выполнен');
-                loadAIChat();
-            })
-            .catch(err => {
-                alert('❌ Ошибка теста');
-                console.error(err);
-            });
-        }
-        
-        function manualAiCheck() {
-            fetch('/api/ai/analyze')
-                .then(r => r.json())
-                .then(data => {
-                    alert('🤖 AI проверка выполнена');
-                    loadAIChat();
-                })
-                .catch(err => {
-                    alert('❌ Ошибка проверки');
-                });
-        }
-        
-        function showHistory() {
-            window.open('/api/history?hours=24&format=json', '_blank');
-        }
-        
-        function showSettings() {
-            alert('⚙️ Настройки:\n\n• AI сообщения: 1 в минуту\n• Вибрации: удары/мин\n• Критические пороги:\n  - Температура > 38°C\n  - Влажность > 90%\n  - Вибрации > 40 уд/мин');
-        }
-        
-        // Таймер для AI сообщений
-        function updateAiTimer() {
-            aiMessageTimer--;
-            if (aiMessageTimer <= 0) {
-                aiMessageTimer = 60;
-                document.getElementById('nextAiMessage').textContent = 'Скоро...';
-            } else {
-                document.getElementById('nextAiMessage').textContent = `${aiMessageTimer} сек`;
-            }
-        }
-        
-        // Инициализация
-        window.onload = function() {
-            initWebSocket();
-            
-            // Обновляем таймер каждую секунду
-            setInterval(updateAiTimer, 1000);
-            
-            // Автообновление AI чата каждую минуту
-            setInterval(loadAIChat, 60000);
-            
-            // Показываем время
-            setInterval(() => {
-                document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
-            }, 1000);
-        };
-    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="static/js/script.js"></script>
 </body>
 </html>
