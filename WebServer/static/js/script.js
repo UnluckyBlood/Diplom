@@ -1,7 +1,16 @@
-let ws;
-let tempChart, humChart, vibChart;
-let selectedFile = null;
-let chartZoomLevel = 1.0;
+// script.js - ПОЛНЫЙ ИСПРАВЛЕННЫЙ КОД ДЛЯ 60 ТОЧЕК
+let ws, tempChart, humChart, vibChart, selectedFile = null;
+let lastDataTime = null;
+
+// Буферы для агрегации данных по минутам
+let minuteBuffers = {
+    temperature: [],
+    humidity: [],
+    vibrations: []
+};
+let currentMinute = null;
+let minuteInterval;
+let chartHistory = []; // Храним историю данных для графиков
 
 // Навигация по страницам
 function showPage(pageId) {
@@ -22,20 +31,112 @@ function showPage(pageId) {
     // При показе главной страницы обновляем графики
     if (pageId === 'dashboard') {
         setTimeout(() => {
-            if (tempChart) refreshCharts();
             loadInitialData();
+            loadCharts();
+            loadAIRecommendations();
         }, 100);
     }
     
     // При показе настроек загружаем сохраненные значения
     if (pageId === 'settings') {
-        loadSettings();
+        setTimeout(loadSettings, 100);
     }
     
     // При показе профиля загружаем данные профиля
     if (pageId === 'profile') {
-        loadProfile();
+        setTimeout(loadProfile, 100);
     }
+}
+
+// Функция для генерации меток времени для 60 минут
+function generateTimeLabels(count = 60) {
+    const now = new Date();
+    const labels = [];
+    
+    // Создаем массив временных меток для последних count минут
+    for (let i = count - 1; i >= 0; i--) {
+        const time = new Date(now.getTime() - i * 60000); // Каждую минуту
+        const hours = time.getHours().toString().padStart(2, '0');
+        const minutes = time.getMinutes().toString().padStart(2, '0');
+        labels.push(`${hours}:${minutes}`);
+    }
+    
+    return labels;
+}
+
+// Функция для агрегации данных по минутам
+function aggregateMinuteData(data) {
+    const now = new Date();
+    const currentMinuteKey = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+    
+    // Если это новая минута, обрабатываем предыдущую
+    if (currentMinute !== currentMinuteKey && currentMinute !== null) {
+        processMinuteBuffer();
+        currentMinute = currentMinuteKey;
+    }
+    
+    // Для первого запуска
+    if (currentMinute === null) {
+        currentMinute = currentMinuteKey;
+    }
+    
+    // Добавляем данные в буфер
+    if (data.temperature !== undefined) {
+        minuteBuffers.temperature.push(data.temperature);
+    }
+    if (data.humidity !== undefined) {
+        minuteBuffers.humidity.push(data.humidity);
+    }
+    if (data.hits_per_minute !== undefined) {
+        minuteBuffers.vibrations.push(data.hits_per_minute);
+    }
+}
+
+// Обработка буфера за минуту (нахождение пиковых значений)
+function processMinuteBuffer() {
+    if (minuteBuffers.temperature.length === 0 && 
+        minuteBuffers.humidity.length === 0 && 
+        minuteBuffers.vibrations.length === 0) {
+        return;
+    }
+    
+    const now = new Date();
+    const aggregatedData = {
+        timestamp: `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`,
+        fullTimestamp: now.toISOString(),
+        temperature: 0,
+        humidity: 0,
+        hits_per_minute: 0
+    };
+    
+    // Находим максимальные значения за минуту
+    if (minuteBuffers.temperature.length > 0) {
+        aggregatedData.temperature = Math.max(...minuteBuffers.temperature);
+    }
+    if (minuteBuffers.humidity.length > 0) {
+        aggregatedData.humidity = Math.max(...minuteBuffers.humidity);
+    }
+    if (minuteBuffers.vibrations.length > 0) {
+        aggregatedData.hits_per_minute = Math.max(...minuteBuffers.vibrations);
+    }
+    
+    // Добавляем в историю
+    chartHistory.push(aggregatedData);
+    
+    // Ограничиваем историю 60 точками (60 минут)
+    if (chartHistory.length > 60) {
+        chartHistory = chartHistory.slice(-60);
+    }
+    
+    // Обновляем графики
+    updateChartsWithHistory();
+    
+    // Очищаем буферы
+    minuteBuffers = {
+        temperature: [],
+        humidity: [],
+        vibrations: []
+    };
 }
 
 // WebSocket подключение
@@ -43,58 +144,83 @@ function initWebSocket() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}/ws`;
     
-    ws = new WebSocket(wsUrl);
+    console.log(`🔌 Подключение к WebSocket: ${wsUrl}`);
     
-    ws.onopen = function() {
-        updateStatus(true);
-        loadInitialData();
-        loadCharts();
-    };
-    
-    ws.onmessage = function(event) {
-        try {
-            const data = JSON.parse(event.data);
-            handleWebSocketMessage(data);
-        } catch (e) {
-            console.error('Ошибка парсинга WebSocket:', e);
-        }
-    };
-    
-    ws.onclose = function() {
-        updateStatus(false);
-        setTimeout(initWebSocket, 3000);
-    };
-    
-    ws.onerror = function(error) {
-        console.error('WebSocket ошибка:', error);
-    };
-}
-
-function updateStatus(connected) {
-    const icon = document.getElementById('statusIcon');
-    const text = document.getElementById('statusText');
-    
-    if (connected) {
-        if (icon) {
-            icon.style.color = '#00b894';
-            text.textContent = 'Подключено';
-        }
-    } else {
-        if (icon) {
-            icon.style.color = '#e17055';
-            text.textContent = 'Отключено';
-        }
+    try {
+        ws = new WebSocket(wsUrl);
+        
+        ws.onopen = function() {
+            console.log('✅ WebSocket подключен');
+            updateWebSocketStatus(true);
+            loadInitialData();
+            loadCharts();
+            loadAIRecommendations();
+            
+            // Запускаем таймер для обработки минутных данных
+            if (minuteInterval) {
+                clearInterval(minuteInterval);
+            }
+            minuteInterval = setInterval(() => {
+                if (currentMinute !== null) {
+                    processMinuteBuffer();
+                }
+            }, 60000); // Каждую минуту
+        };
+        
+        ws.onmessage = function(event) {
+            try {
+                const data = JSON.parse(event.data);
+                
+                if (data.type === 'realtime') {
+                    updateDashboard(data.data);
+                    // Агрегируем данные по минутам
+                    aggregateMinuteData(data.data);
+                } else if (data.type === 'ai_recommendation') {
+                    // Добавляем AI сообщение в чат
+                    if (data.data && data.data.message) {
+                        const message = data.data.message;
+                        // Извлекаем AI сообщение из формата
+                        if (message.includes('AI:')) {
+                            const aiMessage = message.split('AI:')[1]?.trim() || message;
+                            addChatMessage(aiMessage, 'ai');
+                        } else {
+                            addChatMessage(message, 'ai');
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error('❌ Ошибка парсинга WebSocket:', e);
+            }
+        };
+        
+        ws.onclose = function() {
+            console.log('🔌 WebSocket отключен, переподключение через 3 секунды...');
+            updateWebSocketStatus(false);
+            if (minuteInterval) {
+                clearInterval(minuteInterval);
+            }
+            setTimeout(initWebSocket, 3000);
+        };
+        
+        ws.onerror = function(error) {
+            console.error('❌ WebSocket ошибка:', error);
+            updateWebSocketStatus(false);
+        };
+        
+    } catch (e) {
+        console.error('❌ Ошибка создания WebSocket:', e);
+        updateWebSocketStatus(false);
     }
 }
 
-function handleWebSocketMessage(data) {
-    if (data.type === 'realtime') {
-        updateDashboard(data.data);
-        addDataToCharts(data.data);
-    } else if (data.type === 'ai_recommendation') {
-        addChatMessage(data.data);
-    } else if (data.type === 'connection') {
-        console.log('WebSocket:', data.message);
+function updateWebSocketStatus(connected) {
+    const statusIndicator = document.getElementById('webSocketStatus');
+    if (statusIndicator) {
+        if (connected) {
+            statusIndicator.innerHTML = '<i class="fas fa-circle" style="color: #00b894;"></i> <span>Подключено</span>';
+        } else {
+            statusIndicator.innerHTML = '<i class="fas fa-circle" style="color: #e17055;"></i> <span>Отключено</span>';
+        }
     }
 }
 
@@ -120,8 +246,10 @@ function updateDashboard(data) {
         
         const tempStatusElement = document.getElementById('tempStatus');
         const tempStatusIcon = document.getElementById('tempStatusIcon');
-        if (tempStatusElement) tempStatusElement.textContent = `Статус: ${tempStatus}`;
-        if (tempStatusElement) tempStatusElement.style.color = tempColor;
+        if (tempStatusElement) {
+            tempStatusElement.textContent = `Статус: ${tempStatus}`;
+            tempStatusElement.style.color = tempColor;
+        }
         if (tempStatusIcon) tempStatusIcon.style.color = tempColor;
     }
     
@@ -146,8 +274,10 @@ function updateDashboard(data) {
         
         const humStatusElement = document.getElementById('humStatus');
         const humStatusIcon = document.getElementById('humStatusIcon');
-        if (humStatusElement) humStatusElement.textContent = `Статус: ${humStatus}`;
-        if (humStatusElement) humStatusElement.style.color = humColor;
+        if (humStatusElement) {
+            humStatusElement.textContent = `Статус: ${humStatus}`;
+            humStatusElement.style.color = humColor;
+        }
         if (humStatusIcon) humStatusIcon.style.color = humColor;
     }
     
@@ -233,24 +363,126 @@ async function loadInitialData() {
             updateDashboard(data);
         }
     } catch (e) {
-        console.error('Ошибка загрузки данных:', e);
+        console.error('❌ Ошибка загрузки данных:', e);
     }
 }
 
+// AI рекомендации
+async function loadAIRecommendations() {
+    try {
+        const response = await fetch('/api/ai/recommendations?limit=5');
+        const recommendations = await response.json();
+        
+        if (Array.isArray(recommendations) && recommendations.length > 0) {
+            // Очищаем чат, оставляя только приветственное сообщение
+            const chatDiv = document.getElementById('aiChatFull');
+            if (chatDiv) {
+                // Находим приветственное сообщение AI
+                const welcomeMessage = chatDiv.querySelector('.message.ai');
+                chatDiv.innerHTML = '';
+                
+                // Восстанавливаем приветственное сообщение
+                if (welcomeMessage) {
+                    chatDiv.appendChild(welcomeMessage);
+                }
+                
+                // Добавляем последние рекомендации (в обратном порядке - от старых к новым)
+                recommendations.slice().reverse().forEach(rec => {
+                    if (rec.message) {
+                        const message = rec.message;
+                        // Извлекаем AI сообщение если оно в формате "Пользователь: ...\nAI: ..."
+                        if (message.includes('\n')) {
+                            const lines = message.split('\n');
+                            const aiLine = lines.find(line => line.includes('AI:'));
+                            if (aiLine) {
+                                const aiMessage = aiLine.replace('AI:', '').trim();
+                                addChatMessage(aiMessage, 'ai', rec.timestamp);
+                            }
+                        } else {
+                            addChatMessage(message, 'ai', rec.timestamp);
+                        }
+                    }
+                });
+                
+                chatDiv.scrollTop = chatDiv.scrollHeight;
+            }
+        }
+    } catch (e) {
+        console.error('❌ Ошибка загрузки AI рекомендаций:', e);
+    }
+}
+
+// Графики
 async function loadCharts() {
     try {
-        const response = await fetch('/api/history?hours=1');
+        // Добавляем временную метку чтобы избежать кэширования
+        const timestamp = Date.now();
+        const response = await fetch(`/api/history?hours=1&_=${timestamp}`);
         const historyData = await response.json();
         
         if (Array.isArray(historyData) && historyData.length > 0) {
-            createCharts(historyData);
+            // Агрегируем исторические данные по минутам
+            const aggregatedData = aggregateHistoryDataByMinute(historyData);
+            
+            // Ограничиваем 60 точками
+            if (aggregatedData.length > 60) {
+                chartHistory = aggregatedData.slice(-60);
+            } else {
+                chartHistory = aggregatedData;
+            }
+            
+            createCharts(chartHistory);
         } else {
             createEmptyCharts();
         }
     } catch (e) {
-        console.error('Ошибка загрузки графиков:', e);
+        console.error('❌ Ошибка загрузки графиков:', e);
         createEmptyCharts();
     }
+}
+
+// Функция агрегации исторических данных по минутам
+function aggregateHistoryDataByMinute(data) {
+    const aggregated = {};
+    
+    data.forEach(item => {
+        const timestamp = new Date(item.timestamp);
+        // Округляем до минуты
+        const minuteKey = `${timestamp.getHours().toString().padStart(2, '0')}:${timestamp.getMinutes().toString().padStart(2, '0')}`;
+        
+        if (!aggregated[minuteKey]) {
+            aggregated[minuteKey] = {
+                timestamp: minuteKey,
+                fullTimestamp: item.timestamp,
+                temperature: item.temperature || 0,
+                humidity: item.humidity || 0,
+                hits_per_minute: item.hits_per_minute || 0,
+                count: 1
+            };
+        } else {
+            // Находим максимальные значения
+            aggregated[minuteKey].temperature = Math.max(
+                aggregated[minuteKey].temperature, 
+                item.temperature || 0
+            );
+            aggregated[minuteKey].humidity = Math.max(
+                aggregated[minuteKey].humidity, 
+                item.humidity || 0
+            );
+            aggregated[minuteKey].hits_per_minute = Math.max(
+                aggregated[minuteKey].hits_per_minute, 
+                item.hits_per_minute || 0
+            );
+            aggregated[minuteKey].count++;
+        }
+    });
+    
+    // Преобразуем в массив и сортируем по времени
+    const result = Object.values(aggregated).sort((a, b) => {
+        return new Date(a.fullTimestamp) - new Date(b.fullTimestamp);
+    });
+    
+    return result;
 }
 
 function createCharts(historyData) {
@@ -259,53 +491,19 @@ function createCharts(historyData) {
         return;
     }
     
-    // Сортируем по времени
-    historyData.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+    // Генерируем метки времени для последних 60 минут
+    const labels = generateTimeLabels(historyData.length);
+    const temps = historyData.map(d => d.temperature);
+    const hums = historyData.map(d => d.humidity);
+    const vibes = historyData.map(d => d.hits_per_minute);
     
-    // Для часового графика показываем только последние 60 точек
-    // или агрегируем данные если их больше
-    let displayData;
-    const maxPoints = 60;
-    
-    if (historyData.length > maxPoints) {
-        // Берем каждую N-ную точку
-        const step = Math.ceil(historyData.length / maxPoints);
-        displayData = [];
-        for (let i = 0; i < historyData.length; i += step) {
-            displayData.push(historyData[i]);
-        }
-        // Всегда добавляем последнюю точку
-        if (displayData.length === 0 || displayData[displayData.length - 1] !== historyData[historyData.length - 1]) {
-            displayData.push(historyData[historyData.length - 1]);
-        }
-    } else {
-        displayData = historyData;
-    }
-    
-    // Форматируем время
-    const labels = displayData.map(d => {
-        const date = new Date(d.timestamp);
-        return date.getHours().toString().padStart(2, '0') + ':' + 
-               date.getMinutes().toString().padStart(2, '0');
-    });
-    
-    const temps = displayData.map(d => d.temperature || 0);
-    const hums = displayData.map(d => d.humidity || 0);
-    const vibes = displayData.map(d => d.hits_per_minute || 0);
-    
-    // Общие настройки графиков
+    // Общие настройки графиков - ОПТИМИЗИРОВАННЫЕ ДЛЯ 60 ТОЧЕК
     const commonOptions = {
         responsive: true,
         maintainAspectRatio: false,
         plugins: { 
             legend: { 
-                display: true,
-                position: 'top',
-                labels: {
-                    font: {
-                        size: 12
-                    }
-                }
+                display: false
             },
             tooltip: {
                 mode: 'index',
@@ -319,47 +517,74 @@ function createCharts(historyData) {
         },
         scales: {
             y: { 
-                beginAtZero: false, 
+                beginAtZero: false,
                 grid: { 
-                    color: 'rgba(0,0,0,0.05)' 
+                    color: 'rgba(0,0,0,0.05)',
+                    drawBorder: false
                 },
                 ticks: {
                     font: {
                         size: 10
                     },
+                    padding: 5,
                     callback: function(value) {
                         return value.toFixed(1);
                     }
                 }
             },
-            x: { 
+            x: {
                 grid: { 
-                    display: false 
+                    display: true,
+                    drawBorder: false,
+                    color: 'rgba(0,0,0,0.03)'
                 },
                 ticks: {
-                    maxTicksLimit: 10,
+                    maxTicksLimit: 12, // Показываем только 12 меток для 60 минут
                     font: {
-                        size: 10
+                        size: 9
                     },
+                    autoSkip: true,
+                    maxRotation: 45, // Наклон меток для лучшего отображения
+                    minRotation: 45,
+                    padding: 8,
                     callback: function(value, index) {
-                        // Показываем каждую 6-ю метку
-                        return index % Math.ceil(labels.length / 10) === 0 ? labels[index] : '';
+                        const labels = this.chart.data.labels;
+                        if (!labels || labels.length === 0) return '';
+                        
+                        // Для 60 точек показываем только каждую 5-ю метку
+                        if (labels.length >= 40) {
+                            return index % 5 === 0 ? labels[index] : '';
+                        } else if (labels.length >= 20) {
+                            return index % 3 === 0 ? labels[index] : '';
+                        } else {
+                            return labels[index];
+                        }
                     }
                 }
             }
         },
         elements: {
             point: {
-                radius: 2,
-                hoverRadius: 5
+                radius: 1.5, // Уменьшаем точки для 60 значений
+                hoverRadius: 3,
+                hitRadius: 4
             },
             line: {
-                tension: 0.3,
-                borderWidth: 2
+                tension: 0.2,
+                borderWidth: 1.5 // Более тонкая линия
             }
         },
-        animation: {
-            duration: 0
+        interaction: {
+            intersect: false,
+            mode: 'index'
+        },
+        layout: {
+            padding: {
+                left: 0,
+                right: 0,
+                top: 0,
+                bottom: 20 // Увеличиваем отступ снизу для меток
+            }
         }
     };
     
@@ -378,23 +603,13 @@ function createCharts(historyData) {
                     borderColor: '#e17055',
                     backgroundColor: 'rgba(225, 112, 85, 0.1)',
                     fill: true,
-                    borderWidth: 2
+                    borderWidth: 1.5,
+                    pointBackgroundColor: '#e17055',
+                    pointBorderColor: '#ffffff',
+                    pointBorderWidth: 1
                 }]
             },
-            options: {
-                ...commonOptions,
-                scales: {
-                    ...commonOptions.scales,
-                    y: {
-                        ...commonOptions.scales.y,
-                        title: {
-                            display: true,
-                            text: '°C',
-                            color: '#e17055'
-                        }
-                    }
-                }
-            }
+            options: commonOptions
         });
     }
     
@@ -413,23 +628,13 @@ function createCharts(historyData) {
                     borderColor: '#0984e3',
                     backgroundColor: 'rgba(9, 132, 227, 0.1)',
                     fill: true,
-                    borderWidth: 2
+                    borderWidth: 1.5,
+                    pointBackgroundColor: '#0984e3',
+                    pointBorderColor: '#ffffff',
+                    pointBorderWidth: 1
                 }]
             },
-            options: {
-                ...commonOptions,
-                scales: {
-                    ...commonOptions.scales,
-                    y: {
-                        ...commonOptions.scales.y,
-                        title: {
-                            display: true,
-                            text: '%',
-                            color: '#0984e3'
-                        }
-                    }
-                }
-            }
+            options: commonOptions
         });
     }
     
@@ -448,7 +653,10 @@ function createCharts(historyData) {
                     borderColor: '#00b894',
                     backgroundColor: 'rgba(0, 184, 148, 0.1)',
                     fill: true,
-                    borderWidth: 2
+                    borderWidth: 1.5,
+                    pointBackgroundColor: '#00b894',
+                    pointBorderColor: '#ffffff',
+                    pointBorderWidth: 1
                 }]
             },
             options: {
@@ -458,11 +666,7 @@ function createCharts(historyData) {
                     y: {
                         ...commonOptions.scales.y,
                         beginAtZero: true,
-                        title: {
-                            display: true,
-                            text: 'уд/мин',
-                            color: '#00b894'
-                        }
+                        suggestedMin: 0
                     }
                 }
             }
@@ -470,30 +674,33 @@ function createCharts(historyData) {
     }
 }
 
-function addDataToCharts(newData) {
-    if (!newData.timestamp || !tempChart || !humChart || !vibChart) return;
+// Обновление графиков с текущей историей
+function updateChartsWithHistory() {
+    if (chartHistory.length === 0) return;
     
-    const time = new Date(newData.timestamp);
-    const timeLabel = time.getHours().toString().padStart(2, '0') + ':' + 
-                      time.getMinutes().toString().padStart(2, '0');
+    const labels = generateTimeLabels(chartHistory.length);
+    const temps = chartHistory.map(d => d.temperature);
+    const hums = chartHistory.map(d => d.humidity);
+    const vibes = chartHistory.map(d => d.hits_per_minute);
     
-    // Ограничиваем количество точек до 60
-    [tempChart, humChart, vibChart].forEach(chart => {
-        if (chart.data.labels.length >= 60) {
-            chart.data.labels.shift();
-            chart.data.datasets.forEach(dataset => dataset.data.shift());
-        }
-        
-        chart.data.labels.push(timeLabel);
-    });
+    // Обновляем данные графиков
+    if (tempChart) {
+        tempChart.data.labels = labels;
+        tempChart.data.datasets[0].data = temps;
+        tempChart.update('none');
+    }
     
-    tempChart.data.datasets[0].data.push(newData.temperature || 0);
-    humChart.data.datasets[0].data.push(newData.humidity || 0);
-    vibChart.data.datasets[0].data.push(newData.hits_per_minute || 0);
+    if (humChart) {
+        humChart.data.labels = labels;
+        humChart.data.datasets[0].data = hums;
+        humChart.update('none');
+    }
     
-    tempChart.update('none');
-    humChart.update('none');
-    vibChart.update('none');
+    if (vibChart) {
+        vibChart.data.labels = labels;
+        vibChart.data.datasets[0].data = vibes;
+        vibChart.update('none');
+    }
 }
 
 function createEmptyCharts() {
@@ -554,7 +761,7 @@ async function sendUserMessage() {
     
     if (!message) return;
     
-    addFullChatMessage(message, 'user');
+    addChatMessage(message, 'user');
     userInput.value = '';
     
     try {
@@ -567,28 +774,32 @@ async function sendUserMessage() {
         });
         
         const data = await response.json();
-        
         if (data.status === 'success') {
-            addFullChatMessage(data.response, 'ai');
+            addChatMessage(data.response, 'ai');
         } else {
-            addFullChatMessage('❌ Ошибка получения ответа от AI', 'ai');
+            addChatMessage('❌ Ошибка получения ответа от AI', 'ai');
         }
         
     } catch (error) {
         console.error('Ошибка:', error);
-        addFullChatMessage('❌ Ошибка подключения к серверу', 'ai');
+        addChatMessage('❌ Ошибка подключения к серверу', 'ai');
     }
 }
 
-function addFullChatMessage(text, sender) {
+function addChatMessage(text, sender, timestamp = null) {
     const chatDiv = document.getElementById('aiChatFull');
     if (!chatDiv) return;
     
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${sender}`;
     
-    const time = new Date();
-    const timeStr = time.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+    let timeStr;
+    if (timestamp) {
+        const date = new Date(timestamp);
+        timeStr = date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+    } else {
+        timeStr = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+    }
     
     const senderName = sender === 'user' ? 'Вы:' : 'AI:';
     const senderIcon = sender === 'user' ? '👤' : '🤖';
@@ -603,10 +814,6 @@ function addFullChatMessage(text, sender) {
     
     chatDiv.appendChild(messageDiv);
     chatDiv.scrollTop = chatDiv.scrollHeight;
-}
-
-function addChatMessage(data) {
-    addFullChatMessage(data.message, 'ai');
 }
 
 // Управление оборудованием
@@ -624,17 +831,18 @@ async function loadSettings() {
             const settings = data.settings;
             
             // Устанавливаем значения в поля
-            document.querySelector('.parameter-input[value="20"]').value = settings.temperature_min || '20';
-            document.querySelector('.parameter-input[value="75"]').value = settings.temperature_max || '75';
-            document.querySelector('.parameter-input[value="80"]').value = settings.temperature_critical || '80';
-            
-            document.querySelector('.parameter-input[value="5"]').value = settings.pressure_min || '5';
-            document.querySelector('.parameter-input[value="10"]').value = settings.pressure_max || '10';
-            document.querySelector('.parameter-input[value="12"]').value = settings.pressure_critical || '12';
-            
-            document.querySelector('.parameter-input[value="0"]').value = settings.vibration_min || '0';
-            document.querySelector('.parameter-input[value="6"]').value = settings.vibration_max || '6';
-            document.querySelector('.parameter-input[value="8"]').value = settings.vibration_critical || '8';
+            document.querySelectorAll('.parameter-input').forEach(input => {
+                const value = input.defaultValue;
+                if (value === '20') input.value = settings.temperature_min || '20';
+                if (value === '75') input.value = settings.temperature_max || '75';
+                if (value === '80') input.value = settings.temperature_critical || '80';
+                if (value === '5') input.value = settings.pressure_min || '5';
+                if (value === '10') input.value = settings.pressure_max || '10';
+                if (value === '12') input.value = settings.pressure_critical || '12';
+                if (value === '0') input.value = settings.vibration_min || '0';
+                if (value === '6') input.value = settings.vibration_max || '6';
+                if (value === '8') input.value = settings.vibration_critical || '8';
+            });
             
             // Обновляем отображение
             updateSettingsDisplay();
@@ -716,185 +924,11 @@ function resetSettings() {
     updateSettingsDisplay();
 }
 
-// Экспорт данных
-async function exportData() {
-    const startDate = document.getElementById('startDate').value;
-    const endDate = document.getElementById('endDate').value;
-    const equipment = document.getElementById('exportEquipment').value;
-    const format = document.querySelector('input[name="format"]:checked').value;
-    
-    if (!startDate || !endDate) {
-        alert('❌ Укажите период данных');
-        return;
-    }
-    
-    try {
-        const response = await fetch('/api/export', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                start_date: startDate,
-                end_date: endDate,
-                equipment: equipment,
-                format: format
-            })
-        });
-        
-        const data = await response.json();
-        if (data.status === 'success') {
-            // Создаем и скачиваем файл
-            let content, filename, mimeType;
-            
-            if (format === 'json') {
-                content = JSON.stringify(data.data, null, 2);
-                filename = `monitoring-${startDate}-to-${endDate}.json`;
-                mimeType = 'application/json';
-            } else if (format === 'csv') {
-                content = convertToCSV(data.data);
-                filename = `monitoring-${startDate}-to-${endDate}.csv`;
-                mimeType = 'text/csv';
-            } else {
-                // Для Excel используем CSV
-                content = convertToCSV(data.data);
-                filename = `monitoring-${startDate}-to-${endDate}.csv`;
-                mimeType = 'text/csv';
-            }
-            
-            const blob = new Blob([content], {type: mimeType});
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-            
-            alert(`✅ Данные успешно экспортированы!\nФайл: ${filename}\nЗаписей: ${data.metadata.data_count}`);
-        } else {
-            alert(`❌ Ошибка: ${data.message}`);
-        }
-    } catch (error) {
-        console.error('Ошибка экспорта:', error);
-        alert('❌ Ошибка экспорта данных');
-    }
-}
-
-function convertToCSV(data) {
-    if (!data || data.length === 0) return '';
-    
-    const headers = ['timestamp', 'temperature', 'humidity', 'hits_per_minute', 'hit_count'];
-    const csvRows = [headers.join(',')];
-    
-    for (const row of data) {
-        const values = headers.map(header => {
-            const escaped = ('' + (row[header] || '')).replace(/"/g, '""');
-            return `"${escaped}"`;
-        });
-        csvRows.push(values.join(','));
-    }
-    
-    return csvRows.join('\n');
-}
-
-function previewExport() {
-    alert('👁️ Предварительный просмотр\nФункционал в разработке');
-}
-
-// Загрузка файлов
-function handleDragOver(event) {
-    event.preventDefault();
-    event.stopPropagation();
-    const dropZone = document.getElementById('dropZone');
-    dropZone.classList.add('dragover');
-}
-
-function handleDrop(event) {
-    event.preventDefault();
-    event.stopPropagation();
-    
-    const dropZone = document.getElementById('dropZone');
-    dropZone.classList.remove('dragover');
-    
-    const files = event.dataTransfer.files;
-    if (files.length > 0) {
-        handleFile(files[0]);
-    }
-}
-
-function handleFileSelect(event) {
-    const files = event.target.files;
-    if (files.length > 0) {
-        handleFile(files[0]);
-    }
-}
-
-function handleFile(file) {
-    if (!file.name.toLowerCase().endsWith('.csv')) {
-        alert('❌ Пожалуйста, выберите CSV файл');
-        return;
-    }
-    
-    selectedFile = file;
-    
-    const fileInfo = document.getElementById('fileInfo');
-    fileInfo.innerHTML = `
-        <strong>📄 Выбран файл:</strong> ${file.name}<br>
-        <strong>📦 Размер:</strong> ${(file.size / 1024).toFixed(2)} KB<br>
-        <strong>📝 Тип:</strong> ${file.type || 'text/csv'}
-    `;
-    
-    document.getElementById('uploadBtn').disabled = false;
-}
-
-async function uploadFile() {
-    if (!selectedFile) {
-        alert('❌ Пожалуйста, выберите файл');
-        return;
-    }
-    
-    const equipment = document.getElementById('uploadEquipment').value;
-    if (equipment === 'Выберите оборудование') {
-        alert('❌ Пожалуйста, выберите оборудование');
-        return;
-    }
-    
-    const formData = new FormData();
-    formData.append('file', selectedFile);
-    formData.append('equipment', equipment);
-    
-    try {
-        const response = await fetch('/api/upload', {
-            method: 'POST',
-            body: formData
-        });
-        
-        const data = await response.json();
-        if (data.status === 'success') {
-            alert(`✅ Файл "${selectedFile.name}" успешно загружен!\nИмпортировано строк: ${data.rows}`);
-            clearUpload();
-        } else {
-            alert(`❌ Ошибка: ${data.message}`);
-        }
-    } catch (error) {
-        console.error('Ошибка загрузки:', error);
-        alert('❌ Ошибка загрузки файла');
-    }
-}
-
-function clearUpload() {
-    document.getElementById('fileInput').value = '';
-    document.getElementById('fileInfo').innerHTML = '';
-    document.getElementById('uploadBtn').disabled = true;
-    selectedFile = null;
-}
-
 // Профиль
 async function loadProfile() {
     try {
         const response = await fetch('/api/get_profile');
         const data = await response.json();
-        
         if (data.status === 'success') {
             const profile = data.profile;
             
@@ -956,63 +990,42 @@ function resetProfile() {
 
 // Управление графиками
 function zoomChart(direction) {
-    if (direction === 'in') {
-        chartZoomLevel *= 1.2;
-    } else {
-        chartZoomLevel /= 1.2;
-    }
+    if (!tempChart || !humChart || !vibChart) return;
     
-    // Применяем масштаб ко всем графикам
-    [tempChart, humChart, vibChart].forEach(chart => {
-        if (chart) {
-            chart.options.scales.x.ticks.font.size = Math.max(8, 10 * chartZoomLevel);
-            chart.options.scales.y.ticks.font.size = Math.max(8, 10 * chartZoomLevel);
-            chart.options.elements.point.radius = Math.max(1, 2 * chartZoomLevel);
-            chart.options.elements.point.hoverRadius = Math.max(3, 5 * chartZoomLevel);
-            chart.update();
+    const charts = [tempChart, humChart, vibChart];
+    charts.forEach(chart => {
+        if (chart.options.scales.x.zoom) {
+            if (direction === 'in') {
+                chart.zoom(1.1);
+            } else {
+                chart.zoom(0.9);
+            }
         }
     });
 }
 
 function resetChartZoom() {
-    chartZoomLevel = 1.0;
-    [tempChart, humChart, vibChart].forEach(chart => {
-        if (chart) {
+    if (!tempChart || !humChart || !vibChart) return;
+    
+    const charts = [tempChart, humChart, vibChart];
+    charts.forEach(chart => {
+        if (chart.resetZoom) {
             chart.resetZoom();
-            chart.options.scales.x.ticks.font.size = 10;
-            chart.options.scales.y.ticks.font.size = 10;
-            chart.options.elements.point.radius = 2;
-            chart.options.elements.point.hoverRadius = 5;
-            chart.update();
         }
     });
 }
 
 function refreshCharts() {
+    // Сбрасываем историю и загружаем свежие данные
+    chartHistory = [];
     loadCharts();
 }
 
-function setupChartsResponsive() {
-    const width = window.innerWidth;
-    
-    [tempChart, humChart, vibChart].forEach(chart => {
-        if (chart) {
-            if (width < 768) {
-                // На мобильных устройствах
-                chart.options.scales.x.ticks.maxTicksLimit = 5;
-                chart.options.plugins.legend.position = 'bottom';
-            } else if (width < 1200) {
-                // На планшетах
-                chart.options.scales.x.ticks.maxTicksLimit = 8;
-                chart.options.plugins.legend.position = 'top';
-            } else {
-                // На десктопах
-                chart.options.scales.x.ticks.maxTicksLimit = 12;
-                chart.options.plugins.legend.position = 'top';
-            }
-            chart.update();
-        }
-    });
+// Перерисовка графиков при изменении размера окна
+function resizeCharts() {
+    if (tempChart) tempChart.resize();
+    if (humChart) humChart.resize();
+    if (vibChart) vibChart.resize();
 }
 
 // Инициализация
@@ -1031,11 +1044,13 @@ window.onload = function() {
     }
     
     // Обработчик изменения размера окна
-    window.addEventListener('resize', setupChartsResponsive);
+    window.addEventListener('resize', function() {
+        setTimeout(resizeCharts, 100);
+    });
     
     // Обновление данных каждые 5 секунд
     setInterval(loadInitialData, 5000);
     
-    // Обновление графиков каждые 30 секунд
-    setInterval(loadCharts, 30000);
+    // Загрузка AI рекомендаций каждую минуту
+    setInterval(loadAIRecommendations, 60000);
 };
