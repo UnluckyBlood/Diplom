@@ -1,41 +1,27 @@
-﻿from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, Form
+﻿# webserver.py - ПОЛНЫЙ ИСПРАВЛЕННЫЙ КОД
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, Form, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from datetime import datetime, timedelta
+from datetime import datetime
 import json
 import sqlite3
 import uvicorn
-import sys
 import os
 import csv
+import sys
 from io import StringIO
+from typing import List, Optional
 
-# КОНСТАНТЫ БД
+# КОНСТАНТЫ
 DB_NAME = 'sensor_data.db'
-SENSOR_DATA_TABLE = 'sensor_data'
-AI_RECOMMENDATIONS_TABLE = 'ai_recommendations'
-
-# КОНСТАНТЫ СЕРВЕРА
 HOST = "0.0.0.0"
 PORT = 8000
-DASHBOARD_FILE = "dashboard.html"
 
-# КОНСТАНТЫ ДЛЯ API
-HISTORY_DEFAULT_HOURS = 1
-HISTORY_MAX_RECORDS = 100
-RECOMMENDATIONS_DEFAULT_LIMIT = 5
-
-# Модели запросов
+# Модели
 class ChatRequest(BaseModel):
     message: str
-
-class ExportRequest(BaseModel):
-    start_date: str
-    end_date: str
-    equipment: str
-    format: str
 
 class SettingsRequest(BaseModel):
     temperature: dict
@@ -49,27 +35,31 @@ class ProfileRequest(BaseModel):
     department: str
     position: str
 
-app = FastAPI(title="Arduino Monitoring System")
+class AIRecommendationRequest(BaseModel):
+    message: str
+    type: str = "info"
+    parameters: dict = {}
 
-# CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+app = FastAPI(title="Пром Мониторинг")
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 # AI модуль
 try:
-    sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'AI'))
+    current_dir = os.path.dirname(__file__)
+    base_dir = os.path.dirname(current_dir)
+    ai_path = os.path.join(base_dir, 'AI')
+    
+    sys.path.insert(0, ai_path)
+    
     from simple_ai import get_recommendation
     AI_AVAILABLE = True
-    print("✅ AI модуль загружен")
+    print(f"✅ AI модуль загружен из: {ai_path}")
 except ImportError as e:
     AI_AVAILABLE = False
     print(f"⚠️ AI модуль недоступен: {e}")
+    print("ℹ️  Проверьте наличие файла simple_ai.py в папке ../AI")
 
-# Менеджер WebSocket
+# WebSocket менеджер
 class ConnectionManager:
     def __init__(self):
         self.active_connections = []
@@ -89,7 +79,6 @@ class ConnectionManager:
                 await connection.send_text(message)
             except:
                 disconnected.append(connection)
-        
         for connection in disconnected:
             self.disconnect(connection)
 
@@ -105,22 +94,19 @@ def init_database():
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Таблица данных сенсоров
-    cursor.execute(f'''
-        CREATE TABLE IF NOT EXISTS {SENSOR_DATA_TABLE} (
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS sensor_data (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
             temperature REAL,
             humidity REAL,
             hit_count INTEGER DEFAULT 0,
-            hits_per_minute REAL DEFAULT 0,
-            ai_message TEXT
+            hits_per_minute REAL DEFAULT 0
         )
     ''')
     
-    # Таблица AI рекомендаций
-    cursor.execute(f'''
-        CREATE TABLE IF NOT EXISTS {AI_RECOMMENDATIONS_TABLE} (
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS ai_recommendations (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
             message TEXT,
@@ -129,7 +115,13 @@ def init_database():
         )
     ''')
     
-    # Таблица настроек
+    # Проверяем, есть ли колонка parameters, если нет - добавляем
+    cursor.execute("PRAGMA table_info(ai_recommendations)")
+    columns = [column[1] for column in cursor.fetchall()]
+    if 'parameters' not in columns:
+        print("⚠️ Добавляем колонку 'parameters' в таблицу ai_recommendations...")
+        cursor.execute('ALTER TABLE ai_recommendations ADD COLUMN parameters TEXT DEFAULT "{}"')
+    
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS settings (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -138,7 +130,6 @@ def init_database():
         )
     ''')
     
-    # Таблица профилей
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS profiles (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -149,10 +140,6 @@ def init_database():
             position TEXT
         )
     ''')
-    
-    # Индексы для оптимизации
-    cursor.execute(f'CREATE INDEX IF NOT EXISTS idx_sensor_data_timestamp ON {SENSOR_DATA_TABLE}(timestamp)')
-    cursor.execute(f'CREATE INDEX IF NOT EXISTS idx_ai_recommendations_timestamp ON {AI_RECOMMENDATIONS_TABLE}(timestamp)')
     
     # Начальные настройки
     default_settings = [
@@ -170,7 +157,6 @@ def init_database():
     for param, value in default_settings:
         cursor.execute('INSERT OR IGNORE INTO settings (parameter, value) VALUES (?, ?)', (param, value))
     
-    # Начальный профиль
     cursor.execute('''
         INSERT OR IGNORE INTO profiles (full_name, email, phone, department, position) 
         VALUES (?, ?, ?, ?, ?)
@@ -183,163 +169,65 @@ def init_database():
 @app.on_event("startup")
 async def startup_event():
     init_database()
-    print(f"🚀 Система мониторинга запущена")
-    print(f"🌐 http://localhost:{PORT}")
+    print(f"🚀 Сервер запущен на http://localhost:{PORT}")
     print(f"⚡ WebSocket: ws://localhost:{PORT}/ws")
     print(f"🤖 AI: {'✅ Доступен' if AI_AVAILABLE else '❌ Недоступен'}")
 
-# Создаем папку static если ее нет
-static_dir = os.path.join(os.path.dirname(__file__), "static")
-os.makedirs(static_dir, exist_ok=True)
+# Статические файлы
+current_dir = os.path.dirname(__file__)
+static_dir = os.path.join(current_dir, "static")
 os.makedirs(os.path.join(static_dir, "css"), exist_ok=True)
 os.makedirs(os.path.join(static_dir, "js"), exist_ok=True)
-
-# Монтируем статические файлы
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 @app.get("/")
 async def get_dashboard():
     """Главная страница"""
     try:
-        # Сначала пробуем index.html
-        dashboard_path = os.path.join(os.path.dirname(__file__), "index.html")
-        if os.path.exists(dashboard_path):
-            with open(dashboard_path, "r", encoding="utf-8") as f:
-                return HTMLResponse(f.read())
-        
-        # Если нет index.html, пробуем dashboard.html
-        dashboard_path = os.path.join(os.path.dirname(__file__), DASHBOARD_FILE)
+        dashboard_path = os.path.join(os.path.dirname(__file__), "dashboard.html")
         with open(dashboard_path, "r", encoding="utf-8") as f:
             return HTMLResponse(f.read())
     except Exception as e:
-        return HTMLResponse(f"""
-        <html><body>
-            <h1>Arduino Monitoring System</h1>
-            <p>Ошибка загрузки дашборда: {str(e)}</p>
-            <p>Проверьте наличие файла index.html или dashboard.html в папке с сервером</p>
-            <script>setTimeout(() => location.reload(), 2000);</script>
-        </body></html>
-        """)
+        print(f"❌ Ошибка загрузки dashboard.html: {e}")
+        return HTMLResponse("<h1>Пром Мониторинг</h1><p>Ошибка загрузки интерфейса</p>")
 
-@app.get("/style.css")
-async def get_style_css():
-    """CSS файл для совместимости со старыми путями"""
-    css_path = os.path.join(os.path.dirname(__file__), "static", "css", "style.css")
-    if os.path.exists(css_path):
-        return FileResponse(css_path, media_type="text/css")
-    
-    css_path = os.path.join(os.path.dirname(__file__), "style.css")
-    if os.path.exists(css_path):
-        return FileResponse(css_path, media_type="text/css")
-    
-    return JSONResponse({"error": "CSS file not found"}, status_code=404)
-
-@app.get("/script.js")
-async def get_script_js():
-    """JS файл для совместимости со старыми путями"""
-    js_path = os.path.join(os.path.dirname(__file__), "static", "js", "script.js")
-    if os.path.exists(js_path):
-        return FileResponse(js_path, media_type="application/javascript")
-    
-    js_path = os.path.join(os.path.dirname(__file__), "script.js")
-    if os.path.exists(js_path):
-        return FileResponse(js_path, media_type="application/javascript")
-    
-    return JSONResponse({"error": "JS file not found"}, status_code=404)
-
-@app.get("/static/css/style.css")
-async def get_static_style_css():
-    """Статический CSS файл"""
-    css_path = os.path.join(os.path.dirname(__file__), "static", "css", "style.css")
-    if os.path.exists(css_path):
-        return FileResponse(css_path, media_type="text/css")
-    return JSONResponse({"error": "CSS file not found"}, status_code=404)
-
-@app.get("/static/js/script.js")
-async def get_static_script_js():
-    """Статический JS файл"""
-    js_path = os.path.join(os.path.dirname(__file__), "static", "js", "script.js")
-    if os.path.exists(js_path):
-        return FileResponse(js_path, media_type="application/javascript")
-    return JSONResponse({"error": "JS file not found"}, status_code=404)
-
+# API эндпоинты
 @app.post("/api/data")
 async def receive_data(data: dict):
     """Прием данных от Arduino"""
     try:
-        if data.get('type') == 'realtime':
-            sensor_data = data.get('data', {})
-            
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            
-            cursor.execute(f'''
-                INSERT INTO {SENSOR_DATA_TABLE} 
-                (timestamp, temperature, humidity, hit_count, hits_per_minute)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (
-                sensor_data.get('timestamp'),
-                sensor_data.get('temperature'),
-                sensor_data.get('humidity'),
-                sensor_data.get('hit_count', 0),
-                sensor_data.get('hits_per_minute', 0)
-            ))
-            
-            conn.commit()
-            conn.close()
-            
-            # Рассылаем через WebSocket
-            await manager.broadcast(json.dumps({
-                'type': 'realtime',
-                'data': sensor_data,
-                'timestamp': datetime.now().isoformat()
-            }))
-            
-            return {"status": "success", "message": "Data received"}
-        
-        return {"status": "error", "message": "Invalid format"}
-        
-    except Exception as e:
-        print(f"❌ Ошибка приема данных: {e}")
-        return {"status": "error", "message": str(e)}
-
-@app.post("/api/ai/add_recommendation")
-async def add_ai_recommendation(data: dict):
-    """Добавление AI рекомендации"""
-    try:
+        sensor_data = data.get('data', {})
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        cursor.execute(f'''
-            INSERT INTO {AI_RECOMMENDATIONS_TABLE} 
-            (timestamp, message, type, parameters)
-            VALUES (?, ?, ?, ?)
+        cursor.execute('''
+            INSERT INTO sensor_data (timestamp, temperature, humidity, hit_count, hits_per_minute)
+            VALUES (?, ?, ?, ?, ?)
         ''', (
-            data.get("timestamp", datetime.now().isoformat()),
-            data.get("message", ""),
-            data.get("type", "info"),
-            json.dumps(data.get("parameters", {}))
+            sensor_data.get('timestamp'),
+            sensor_data.get('temperature'),
+            sensor_data.get('humidity'),
+            sensor_data.get('hit_count', 0),
+            sensor_data.get('hits_per_minute', 0)
         ))
         
         conn.commit()
         conn.close()
         
-        # Рассылаем через WebSocket
         await manager.broadcast(json.dumps({
-            "type": "ai_recommendation",
-            "data": data,
-            "timestamp": datetime.now().isoformat()
+            'type': 'realtime',
+            'data': sensor_data,
+            'timestamp': datetime.now().isoformat()
         }))
         
-        return {"status": "success", "message": "Recommendation added"}
-        
+        return {"status": "success"}
     except Exception as e:
-        print(f"❌ Ошибка добавления AI рекомендации: {e}")
+        print(f"❌ Ошибка приема данных: {e}")
         return {"status": "error", "message": str(e)}
 
 @app.post("/api/ai/chat")
 async def ai_chat(request: ChatRequest):
-    """Обработка сообщений AI чата"""
+    """Обработка AI чата"""
     try:
         user_message = request.message
         
@@ -347,12 +235,7 @@ async def ai_chat(request: ChatRequest):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        cursor.execute(f'''
-            SELECT temperature, humidity, hit_count, hits_per_minute
-            FROM {SENSOR_DATA_TABLE}
-            ORDER BY timestamp DESC
-            LIMIT 1
-        ''')
+        cursor.execute('SELECT temperature, humidity, hit_count, hits_per_minute FROM sensor_data ORDER BY timestamp DESC LIMIT 1')
         
         row = cursor.fetchone()
         conn.close()
@@ -389,7 +272,7 @@ async def ai_chat(request: ChatRequest):
             "timestamp": datetime.now().isoformat(),
             "message": f"💬 Пользователь: {user_message}\n🤖 AI: {response_message}",
             "type": "chat",
-            "parameters": {"user_message": user_message, "response": response_message}
+            "parameters": json.dumps({"user_message": user_message, "response": response_message})
         })
         
         return {"status": "success", "response": response_message}
@@ -398,112 +281,58 @@ async def ai_chat(request: ChatRequest):
         print(f"❌ Ошибка AI чата: {e}")
         return {"status": "error", "message": str(e)}
 
-@app.get("/api/current")
-async def get_current_data():
-    """Текущие данные"""
+async def add_ai_recommendation(data):
+    """Добавление AI рекомендации"""
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        cursor.execute(f'''
-            SELECT timestamp, temperature, humidity, hit_count, hits_per_minute
-            FROM {SENSOR_DATA_TABLE} 
-            ORDER BY timestamp DESC
-            LIMIT 1
-        ''')
+        cursor.execute('INSERT INTO ai_recommendations (timestamp, message, type, parameters) VALUES (?, ?, ?, ?)',
+                      (data.get("timestamp", datetime.now().isoformat()),
+                       data.get("message", ""),
+                       data.get("type", "info"),
+                       data.get("parameters", "{}")))
         
-        row = cursor.fetchone()
+        conn.commit()
         conn.close()
         
-        if row:
-            return {
-                "timestamp": row["timestamp"],
-                "temperature": row["temperature"] or 0.0,
-                "humidity": row["humidity"] or 0.0,
-                "hit_count": row["hit_count"] or 0,
-                "hits_per_minute": row["hits_per_minute"] or 0.0
-            }
-        else:
-            return {
-                "message": "No data",
-                "timestamp": datetime.now().isoformat(),
-                "temperature": 0.0,
-                "humidity": 0.0,
-                "hit_count": 0,
-                "hits_per_minute": 0.0
-            }
-        
-    except Exception as e:
-        print(f"❌ Ошибка получения текущих данных: {e}")
-        return {"status": "error", "message": str(e)}
-
-@app.get("/api/history")
-async def get_history(hours: int = HISTORY_DEFAULT_HOURS):
-    """История"""
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute(f'''
-            SELECT timestamp, temperature, humidity, hits_per_minute, hit_count
-            FROM {SENSOR_DATA_TABLE} 
-            WHERE timestamp >= datetime('now', ?)
-            ORDER BY timestamp ASC
-            LIMIT ?
-        ''', (f'-{hours} hours', HISTORY_MAX_RECORDS))
-        
-        rows = cursor.fetchall()
-        conn.close()
-        
-        history = []
-        for row in rows:
-            history.append({
-                "timestamp": row["timestamp"],
-                "temperature": row["temperature"] or 0.0,
-                "humidity": row["humidity"] or 0.0,
-                "hits_per_minute": row["hits_per_minute"] or 0.0,
-                "hit_count": row["hit_count"] or 0
-            })
-        
-        return history
-        
-    except Exception as e:
-        print(f"❌ Ошибка получения истории: {e}")
-        return []
-
-@app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    await manager.connect(websocket)
-    try:
-        await websocket.send_text(json.dumps({
-            "type": "connection",
-            "message": "✅ Подключено к серверу мониторинга",
+        # Рассылаем через WebSocket
+        await manager.broadcast(json.dumps({
+            "type": "ai_recommendation",
+            "data": data,
             "timestamp": datetime.now().isoformat()
         }))
         
-        while True:
-            await websocket.receive_text()
-                
-    except WebSocketDisconnect:
-        manager.disconnect(websocket)
     except Exception as e:
-        print(f"❌ WebSocket ошибка: {e}")
-        manager.disconnect(websocket)
+        print(f"❌ Ошибка добавления рекомендации: {e}")
+
+@app.post("/api/ai/add_recommendation")
+async def add_recommendation(request: AIRecommendationRequest):
+    """Добавление AI рекомендации (для main.py)"""
+    try:
+        await add_ai_recommendation({
+            "timestamp": datetime.now().isoformat(),
+            "message": request.message,
+            "type": request.type,
+            "parameters": json.dumps(request.parameters)
+        })
+        return {"status": "success", "message": "Recommendation added"}
+    except Exception as e:
+        print(f"❌ Ошибка добавления рекомендации: {e}")
+        return {"status": "error", "message": str(e)}
 
 @app.get("/api/ai/recommendations")
-async def get_ai_recommendations(limit: int = RECOMMENDATIONS_DEFAULT_LIMIT):
-    """AI рекомендации"""
+async def get_ai_recommendations(limit: int = Query(10, ge=1, le=100)):
+    """Получение последних AI рекомендаций"""
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        
-        cursor.execute(f'''
-            SELECT timestamp, message, type, parameters
-            FROM {AI_RECOMMENDATIONS_TABLE}
-            ORDER BY timestamp DESC
+        cursor.execute('''
+            SELECT timestamp, message, type, parameters 
+            FROM ai_recommendations 
+            ORDER BY timestamp DESC 
             LIMIT ?
         ''', (limit,))
-        
         rows = cursor.fetchall()
         conn.close()
         
@@ -517,10 +346,81 @@ async def get_ai_recommendations(limit: int = RECOMMENDATIONS_DEFAULT_LIMIT):
             })
         
         return recommendations
-        
     except Exception as e:
         print(f"❌ Ошибка получения AI рекомендаций: {e}")
         return []
+
+@app.get("/api/current")
+async def get_current_data():
+    """Текущие данные"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM sensor_data ORDER BY timestamp DESC LIMIT 1')
+    row = cursor.fetchone()
+    conn.close()
+    
+    if row:
+        return {
+            "timestamp": row["timestamp"],
+            "temperature": row["temperature"] or 0.0,
+            "humidity": row["humidity"] or 0.0,
+            "hit_count": row["hit_count"] or 0,
+            "hits_per_minute": row["hits_per_minute"] or 0.0
+        }
+    return {"message": "Нет данных"}
+
+@app.get("/api/history")
+async def get_history(hours: int = Query(1, ge=1, le=24)):
+    """История данных"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT timestamp, temperature, humidity, hit_count, hits_per_minute
+            FROM sensor_data 
+            WHERE timestamp >= datetime('now', ?)
+            ORDER BY timestamp ASC
+            LIMIT 500
+        ''', (f'-{hours} hours',))
+        rows = cursor.fetchall()
+        conn.close()
+        
+        history = []
+        for row in rows:
+            history.append({
+                "timestamp": row["timestamp"],
+                "temperature": row["temperature"] or 0.0,
+                "humidity": row["humidity"] or 0.0,
+                "hit_count": row["hit_count"] or 0,
+                "hits_per_minute": row["hits_per_minute"] or 0.0
+            })
+        
+        return history
+    except Exception as e:
+        print(f"❌ Ошибка получения истории: {e}")
+        return []
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        # Отправляем приветственное сообщение
+        await websocket.send_text(json.dumps({
+            "type": "connection",
+            "message": "✅ Подключено к серверу мониторинга",
+            "timestamp": datetime.now().isoformat()
+        }))
+        
+        while True:
+            # Ждем сообщения (хотя мы их не обрабатываем, но нужно для поддержания соединения)
+            await websocket.receive_text()
+                
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+        print("🔌 WebSocket отключен")
+    except Exception as e:
+        print(f"❌ WebSocket ошибка: {e}")
+        manager.disconnect(websocket)
 
 @app.post("/api/save_settings")
 async def save_settings(request: SettingsRequest):
@@ -567,7 +467,6 @@ async def get_settings():
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        
         cursor.execute('SELECT parameter, value FROM settings')
         rows = cursor.fetchall()
         conn.close()
@@ -577,7 +476,6 @@ async def get_settings():
             settings[row["parameter"]] = row["value"]
         
         return {"status": "success", "settings": settings}
-        
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
@@ -587,24 +485,14 @@ async def save_profile(request: ProfileRequest):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        
         cursor.execute('''
             UPDATE profiles SET 
-            full_name = ?, email = ?, phone = ?, department = ?, position = ?
-            WHERE id = 1
-        ''', (
-            request.fullName,
-            request.email,
-            request.phone,
-            request.department,
-            request.position
-        ))
-        
+            full_name=?, email=?, phone=?, department=?, position=?
+            WHERE id=1
+        ''', (request.fullName, request.email, request.phone, request.department, request.position))
         conn.commit()
         conn.close()
-        
         return {"status": "success", "message": "Профиль успешно сохранен"}
-        
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
@@ -614,8 +502,7 @@ async def get_profile():
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        
-        cursor.execute('SELECT full_name, email, phone, department, position FROM profiles WHERE id = 1')
+        cursor.execute('SELECT full_name, email, phone, department, position FROM profiles WHERE id=1')
         row = cursor.fetchone()
         conn.close()
         
@@ -632,103 +519,37 @@ async def get_profile():
             }
         else:
             return {"status": "error", "message": "Профиль не найден"}
-        
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
-
-@app.post("/api/export")
-async def export_data(request: ExportRequest):
-    """Экспорт данных"""
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        # Получаем данные за указанный период
-        cursor.execute(f'''
-            SELECT timestamp, temperature, humidity, hits_per_minute, hit_count
-            FROM {SENSOR_DATA_TABLE}
-            WHERE date(timestamp) BETWEEN ? AND ?
-            ORDER BY timestamp ASC
-        ''', (request.start_date, request.end_date))
-        
-        rows = cursor.fetchall()
-        conn.close()
-        
-        data = []
-        for row in rows:
-            data.append({
-                "timestamp": row["timestamp"],
-                "temperature": row["temperature"],
-                "humidity": row["humidity"],
-                "hits_per_minute": row["hits_per_minute"],
-                "hit_count": row["hit_count"]
-            })
-        
-        return {
-            "status": "success", 
-            "data": data,
-            "metadata": {
-                "period": f"{request.start_date} - {request.end_date}",
-                "equipment": request.equipment,
-                "format": request.format,
-                "data_count": len(data),
-                "exported_at": datetime.now().isoformat()
-            }
-        }
-        
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
 @app.post("/api/upload")
-async def upload_file(file: UploadFile = File(...), equipment: str = Form(...)):
-    """Загрузка файла"""
+async def upload_file(file: UploadFile = File(...)):
+    """Загрузка CSV файла"""
     try:
         contents = await file.read()
-        
-        # Парсим CSV
         csv_text = contents.decode('utf-8')
         csv_reader = csv.reader(StringIO(csv_text))
         rows = list(csv_reader)
         
-        if len(rows) < 2:
-            return {"status": "error", "message": "Файл пустой"}
-        
-        # Сохраняем в БД
         conn = get_db_connection()
         cursor = conn.cursor()
-        
         imported_count = 0
-        for i, row in enumerate(rows[1:], 1):  # Пропускаем заголовок
+        
+        for row in rows[1:]:  # Пропускаем заголовок
             if len(row) >= 5:
                 try:
-                    timestamp = row[0]
-                    temperature = float(row[1]) if row[1] else 0.0
-                    humidity = float(row[2]) if row[2] else 0.0
-                    hits_per_minute = float(row[3]) if row[3] else 0.0
-                    hit_count = int(row[4]) if row[4] else 0
-                    
-                    cursor.execute(f'''
-                        INSERT INTO {SENSOR_DATA_TABLE} 
-                        (timestamp, temperature, humidity, hits_per_minute, hit_count)
+                    cursor.execute('''
+                        INSERT INTO sensor_data (timestamp, temperature, humidity, hits_per_minute, hit_count)
                         VALUES (?, ?, ?, ?, ?)
-                    ''', (timestamp, temperature, humidity, hits_per_minute, hit_count))
-                    
+                    ''', (row[0], float(row[1] or 0), float(row[2] or 0), float(row[3] or 0), int(row[4] or 0)))
                     imported_count += 1
-                except ValueError as e:
-                    print(f"Ошибка в строке {i}: {e}")
+                except:
+                    continue
         
         conn.commit()
         conn.close()
-        
-        return {
-            "status": "success", 
-            "message": f"Файл успешно загружен",
-            "rows": imported_count,
-            "total_rows": len(rows) - 1
-        }
-        
+        return {"status": "success", "message": f"Загружено {imported_count} строк"}
     except Exception as e:
-        print(f"❌ Ошибка загрузки файла: {e}")
         return {"status": "error", "message": str(e)}
 
 @app.get("/api/status")
@@ -736,13 +557,10 @@ async def get_status():
     """Статус системы"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    cursor.execute(f'SELECT COUNT(*) as count FROM {SENSOR_DATA_TABLE}')
-    data_count = cursor.fetchone()["count"]
-    
-    cursor.execute(f'SELECT COUNT(*) as count FROM {AI_RECOMMENDATIONS_TABLE}')
-    ai_count = cursor.fetchone()["count"]
-    
+    cursor.execute('SELECT COUNT(*) FROM sensor_data')
+    data_count = cursor.fetchone()[0]
+    cursor.execute('SELECT COUNT(*) FROM ai_recommendations')
+    ai_count = cursor.fetchone()[0]
     conn.close()
     
     return {
@@ -756,8 +574,4 @@ async def get_status():
     }
 
 if __name__ == "__main__":
-    print("INFO: Starting server process...")
-    print("INFO: Waiting for application startup.")
-    print("INFO: Application startup complete.")
-    print(f"INFO: Uvicorn running on http://0.0.0.0:{PORT} (Press CTRL+C to quit)")
     uvicorn.run(app, host=HOST, port=PORT)

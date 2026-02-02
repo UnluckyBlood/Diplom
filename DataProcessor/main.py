@@ -1,13 +1,12 @@
-﻿import serial
+﻿# main.py - ПОЛНЫЙ ИСПРАВЛЕННЫЙ КОД
+import serial
 import time
 import json
-import sqlite3
 import requests
-from datetime import datetime, timedelta
-from collections import deque
 import sys
 import os
-import numpy as np
+from datetime import datetime, timedelta
+from collections import deque
 
 # КОНСТАНТЫ КОНФИГУРАЦИИ
 SERIAL_PORT = 'COM3'
@@ -32,31 +31,39 @@ HIT_TIMESTAMP_BUFFER_SIZE = 300
 class ArduinoDataProcessor:
     def __init__(self):
         self.serial_conn = None
-        self.db_conn = sqlite3.connect('sensor_data.db', check_same_thread=False)
-        self.init_db()
         self.hit_timestamps = deque(maxlen=HIT_TIMESTAMP_BUFFER_SIZE)
         self.last_hit_count = 0
         self.last_temp = None
         self.last_hum = None
-        self.setup_serial()
         
-    def init_db(self):
-        cursor = self.db_conn.cursor()
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS sensor_data (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                temperature REAL,
-                humidity REAL,
-                hit_count INTEGER DEFAULT 0,
-                hits_per_minute REAL DEFAULT 0,
-                ai_message TEXT
-            )
-        ''')
-        self.db_conn.commit()
-        print("✅ База данных инициализирована")
+        # Инициализация AI модуля
+        self.ai_available = False
+        self.get_recommendation = None
+        self.init_ai_module()
+        
+        self.setup_serial()
+    
+    def init_ai_module(self):
+        """Инициализация AI модуля"""
+        try:
+            # main.py находится в DataProcessor, поднимаемся на уровень выше, затем в AI
+            current_dir = os.path.dirname(__file__)
+            base_dir = os.path.dirname(current_dir)
+            ai_path = os.path.join(base_dir, 'AI')
+            
+            sys.path.insert(0, ai_path)
+            
+            from simple_ai import get_recommendation
+            self.get_recommendation = get_recommendation
+            self.ai_available = True
+            print(f"✅ AI модуль загружен из: {ai_path}")
+        except ImportError as e:
+            self.ai_available = False
+            print(f"⚠️ AI модуль недоступен: {e}")
+            print("ℹ️  AI сообщения будут генерироваться локально")
     
     def setup_serial(self):
+        """Настройка последовательного порта"""
         for attempt in range(MAX_SERIAL_ATTEMPTS):
             try:
                 print(f"🔌 Подключение к {SERIAL_PORT} (попытка {attempt + 1}/{MAX_SERIAL_ATTEMPTS})...")
@@ -155,17 +162,44 @@ class ArduinoDataProcessor:
     def get_ai_analysis(self, temp, hum, hits):
         """Получение анализа от AI"""
         try:
-            sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'AI'))
-            from simple_ai import get_recommendation
-            
-            result = get_recommendation(temp, hum, hits)
-            return result
-            
+            if self.ai_available and self.get_recommendation:
+                result = self.get_recommendation(temp, hum, hits)
+                return result
+            else:
+                # Генерируем локальный анализ если AI недоступен
+                hits_per_minute = self.calculate_hits_per_minute()
+                
+                # Простая логика анализа
+                if temp > 35:
+                    message = f"⚠️ Внимание! Высокая температура: {temp:.1f}°C"
+                    priority = 'warning'
+                elif temp < 15:
+                    message = f"⚠️ Низкая температура: {temp:.1f}°C"
+                    priority = 'warning'
+                elif hum > 80:
+                    message = f"⚠️ Высокая влажность: {hum:.1f}%"
+                    priority = 'warning'
+                elif hum < 20:
+                    message = f"⚠️ Низкая влажность: {hum:.1f}%"
+                    priority = 'warning'
+                elif hits_per_minute > 30:
+                    message = f"⚠️ Повышенные вибрации: {hits_per_minute:.1f} уд/мин"
+                    priority = 'warning'
+                else:
+                    message = f"✅ Система работает нормально. Темп: {temp:.1f}°C, Вл: {hum:.1f}%"
+                    priority = 'normal'
+                
+                return {
+                    'ai_message': message,
+                    'priority_level': priority,
+                    'hits_per_minute': hits_per_minute
+                }
+                
         except Exception as e:
             print(f"⚠️ Ошибка AI анализа: {e}")
             hits_per_minute = self.calculate_hits_per_minute()
             return {
-                'ai_message': "🤖 AI недоступен. Продолжайте мониторинг",
+                'ai_message': "🤖 Ошибка анализа данных",
                 'priority_level': 'normal',
                 'hits_per_minute': hits_per_minute
             }
@@ -186,7 +220,7 @@ class ArduinoDataProcessor:
         """Основной цикл обработки"""
         print("=" * 60)
         print("🚀 ARDUINO DATA PROCESSOR v5.0")
-        print("🤖 AI сообщения: отправляются при каждом изменении данных")
+        print(f"🤖 AI: {'✅ Включен' if self.ai_available else '⚠️ Локальный режим'}")
         print("=" * 60)
         
         last_status_time = datetime.now()
@@ -293,15 +327,11 @@ class ArduinoDataProcessor:
             priority = ai_result.get('priority_level', 'normal')
             
             chat_message = {
-                "timestamp": datetime.now().isoformat(),
                 "message": ai_result.get('ai_message', "🤖 Нет рекомендаций"),
                 "type": "info",
-                "confidence": 0.9,
                 "parameters": {
                     "hits_per_minute": ai_result.get('hits_per_minute', 0),
-                    "priority_level": priority,
-                    "risk_score": ai_result.get('risk_score', 0.0),
-                    "is_critical": priority == 'critical'
+                    "priority_level": priority
                 }
             }
             
@@ -316,11 +346,15 @@ class ArduinoDataProcessor:
             
             response = requests.post(AI_CHAT_URL, json=chat_message, timeout=5)
             if response.status_code == 200:
-                msg = ai_result.get('ai_message', '')
-                short_msg = msg[:80] + "..." if len(msg) > 80 else msg
-                print(f"✅ AI: {short_msg}")
+                data = response.json()
+                if data.get("status") == "success":
+                    msg = ai_result.get('ai_message', '')
+                    short_msg = msg[:80] + "..." if len(msg) > 80 else msg
+                    print(f"🤖 AI: {short_msg}")
+                else:
+                    print(f"⚠️ Ошибка от сервера: {data.get('message', 'Unknown error')}")
             else:
-                print(f"⚠️ Не удалось отправить AI сообщение в чат")
+                print(f"⚠️ Не удалось отправить AI сообщение в чат (HTTP {response.status_code})")
                 
         except Exception as e:
             print(f"❌ Ошибка отправки AI в чат: {e}")
@@ -330,7 +364,6 @@ class ArduinoDataProcessor:
         if self.serial_conn and self.serial_conn.is_open:
             self.serial_conn.close()
             print("🔌 Последовательный порт закрыт")
-        self.db_conn.close()
         print("✅ Ресурсы очищены")
 
 def main():
