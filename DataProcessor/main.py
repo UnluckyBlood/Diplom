@@ -1,4 +1,4 @@
-﻿# main.py - ПОЛНЫЙ ИСПРАВЛЕННЫЙ КОД
+﻿# main.py - ПОЛНЫЙ ИСПРАВЛЕННЫЙ КОД (без автоматической отправки AI сообщений в чат)
 import serial
 import time
 import json
@@ -23,7 +23,6 @@ INITIAL_CONNECTION_DELAY = 2  # секунды
 TEMPERATURE_AVERAGE_WINDOW = 30  # секунд для усреднения температуры
 STATUS_UPDATE_INTERVAL = 10  # секунд между статусными сообщениями
 MAIN_LOOP_DELAY = 0.1  # секунд
-AI_MESSAGE_INTERVAL = 30  # секунд между AI сообщениями
 
 # РАЗМЕРЫ БУФЕРОВ
 HIT_TIMESTAMP_BUFFER_SIZE = 300
@@ -36,7 +35,7 @@ class ArduinoDataProcessor:
         self.last_temp = None
         self.last_hum = None
         
-        # Инициализация AI модуля
+        # Инициализация AI модуля (оставляем для возможного будущего использования)
         self.ai_available = False
         self.get_recommendation = None
         self.init_ai_module()
@@ -46,7 +45,6 @@ class ArduinoDataProcessor:
     def init_ai_module(self):
         """Инициализация AI модуля"""
         try:
-            # main.py находится в DataProcessor, поднимаемся на уровень выше, затем в AI
             current_dir = os.path.dirname(__file__)
             base_dir = os.path.dirname(current_dir)
             ai_path = os.path.join(base_dir, 'AI')
@@ -89,7 +87,6 @@ class ArduinoDataProcessor:
         current_time = datetime.now()
         one_minute_ago = current_time - timedelta(seconds=60)
         
-        # Удаляем старые записи
         while self.hit_timestamps and self.hit_timestamps[0] < one_minute_ago:
             self.hit_timestamps.popleft()
         
@@ -160,16 +157,14 @@ class ArduinoDataProcessor:
             return None
     
     def get_ai_analysis(self, temp, hum, hits):
-        """Получение анализа от AI"""
+        """Получение анализа от AI (используется только для возможных будущих уведомлений)"""
         try:
             if self.ai_available and self.get_recommendation:
                 result = self.get_recommendation(temp, hum, hits)
                 return result
             else:
-                # Генерируем локальный анализ если AI недоступен
                 hits_per_minute = self.calculate_hits_per_minute()
                 
-                # Простая логика анализа
                 if temp > 35:
                     message = f"⚠️ Внимание! Высокая температура: {temp:.1f}°C"
                     priority = 'warning'
@@ -205,26 +200,22 @@ class ArduinoDataProcessor:
             }
     
     def should_send_ai_message(self, temp, hum):
-        """Проверяем, изменились ли данные"""
+        """Проверяем, изменились ли данные (не используется, оставлено для совместимости)"""
         if self.last_temp is None or self.last_hum is None:
             return True
-        
-        # Отправляем если температура изменилась более чем на 0.5°C
-        # или влажность изменилась более чем на 2%
         temp_changed = abs(temp - self.last_temp) > 0.5
         hum_changed = abs(hum - self.last_hum) > 2
-        
         return temp_changed or hum_changed
     
     def process_data(self):
-        """Основной цикл обработки"""
+        """Основной цикл обработки (без автоматической отправки AI сообщений в чат)"""
         print("=" * 60)
         print("🚀 ARDUINO DATA PROCESSOR v5.0")
         print(f"🤖 AI: {'✅ Включен' if self.ai_available else '⚠️ Локальный режим'}")
+        print("ℹ️  Автоматические AI-сообщения в чат отключены (только сбор данных)")
         print("=" * 60)
         
         last_status_time = datetime.now()
-        last_ai_message_time = datetime.now()
         temp_buffer = []
         
         try:
@@ -248,41 +239,14 @@ class ArduinoDataProcessor:
                                 time_window = datetime.now() - timedelta(seconds=TEMPERATURE_AVERAGE_WINDOW)
                                 temp_buffer = [d for d in temp_buffer if d['time'] > time_window]
                                 
-                                # Отправляем данные на сервер
+                                # Отправляем данные на сервер (всегда)
                                 self.send_to_server(data)
                                 
-                                # Проверяем AI сообщения
+                                # Обновляем последние значения для отображения в статусе
                                 if len(temp_buffer) > 0:
-                                    # Берем последнее значение для быстрой реакции
                                     last_data = temp_buffer[-1]
-                                    temp = last_data['temp']
-                                    hum = last_data['hum']
-                                    
-                                    # Проверяем, изменились ли данные
-                                    current_time = datetime.now()
-                                    if self.should_send_ai_message(temp, hum) or \
-                                       (current_time - last_ai_message_time).seconds >= AI_MESSAGE_INTERVAL:
-                                        
-                                        # Получаем AI анализ
-                                        ai_result = self.get_ai_analysis(
-                                            temp, 
-                                            hum, 
-                                            self.last_hit_count
-                                        )
-                                        
-                                        # Добавляем hits_per_minute если его нет
-                                        if 'hits_per_minute' not in ai_result:
-                                            ai_result['hits_per_minute'] = self.calculate_hits_per_minute()
-                                        
-                                        # Отправляем в чат
-                                        self.send_ai_to_chat(ai_result)
-                                        
-                                        # Обновляем время последнего AI сообщения
-                                        last_ai_message_time = current_time
-                                        
-                                        # Обновляем последние значения
-                                        self.last_temp = temp
-                                        self.last_hum = hum
+                                    self.last_temp = last_data['temp']
+                                    self.last_hum = last_data['hum']
                     
                     except Exception as e:
                         print(f"❌ Ошибка обработки данных: {e}")
@@ -306,7 +270,6 @@ class ArduinoDataProcessor:
     def send_to_server(self, data):
         """Отправка данных на сервер"""
         try:
-            # Добавляем hits_per_minute
             if 'temperature' in data:
                 data['hits_per_minute'] = self.calculate_hits_per_minute()
             
@@ -322,42 +285,9 @@ class ArduinoDataProcessor:
             print(f"❌ Ошибка отправки на сервер: {e}")
     
     def send_ai_to_chat(self, ai_result):
-        """Отправка AI сообщения в чат"""
-        try:
-            priority = ai_result.get('priority_level', 'normal')
-            
-            chat_message = {
-                "message": ai_result.get('ai_message', "🤖 Нет рекомендаций"),
-                "type": "info",
-                "parameters": {
-                    "hits_per_minute": ai_result.get('hits_per_minute', 0),
-                    "priority_level": priority
-                }
-            }
-            
-            # Определяем тип сообщения по приоритету
-            type_mapping = {
-                'critical': 'danger',
-                'warning': 'warning',
-                'caution': 'warning',
-                'normal': 'success'
-            }
-            chat_message['type'] = type_mapping.get(priority, 'info')
-            
-            response = requests.post(AI_CHAT_URL, json=chat_message, timeout=5)
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("status") == "success":
-                    msg = ai_result.get('ai_message', '')
-                    short_msg = msg[:80] + "..." if len(msg) > 80 else msg
-                    print(f"🤖 AI: {short_msg}")
-                else:
-                    print(f"⚠️ Ошибка от сервера: {data.get('message', 'Unknown error')}")
-            else:
-                print(f"⚠️ Не удалось отправить AI сообщение в чат (HTTP {response.status_code})")
-                
-        except Exception as e:
-            print(f"❌ Ошибка отправки AI в чат: {e}")
+        """Отправка AI сообщения в чат (не вызывается, оставлено для возможного расширения)"""
+        # Функция больше не используется, но оставлена для совместимости
+        pass
     
     def cleanup(self):
         """Очистка ресурсов"""
