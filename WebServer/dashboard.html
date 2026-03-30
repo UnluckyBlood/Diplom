@@ -8,6 +8,67 @@
     <link rel="stylesheet" href="static/css/style.css">
 </head>
 <body>
+    <!-- Модальное окно входа -->
+    <div id="loginModal" class="modal" style="display: flex;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <i class="fas fa-industry"></i>
+                <h2>Пром Мониторинг</h2>
+            </div>
+            <div class="modal-body">
+                <div class="login-tabs">
+                    <button class="tab-btn active" onclick="switchTab('login')">Вход</button>
+                    <button class="tab-btn" onclick="switchTab('register')">Регистрация</button>
+                </div>
+                
+                <div id="loginForm" class="login-form active">
+                    <div class="form-group">
+                        <label><i class="fas fa-user"></i> Имя пользователя</label>
+                        <input type="text" id="loginUsername" class="form-control" placeholder="admin">
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-lock"></i> Пароль</label>
+                        <input type="password" id="loginPassword" class="form-control" placeholder="••••••••">
+                    </div>
+                    <div id="loginError" class="error-message"></div>
+                    <button class="btn btn-login" onclick="login()">
+                        <i class="fas fa-sign-in-alt"></i> Войти
+                    </button>
+                    <div class="login-info">
+                        <p><i class="fas fa-info-circle"></i> Тестовый пользователь: <strong>admin</strong> / <strong>admin123</strong></p>
+                    </div>
+                </div>
+                
+                <div id="registerForm" class="login-form">
+                    <div class="form-group">
+                        <label><i class="fas fa-user"></i> Имя пользователя</label>
+                        <input type="text" id="regUsername" class="form-control" placeholder="username">
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-user-circle"></i> Полное имя</label>
+                        <input type="text" id="regFullName" class="form-control" placeholder="Иван Петров">
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-envelope"></i> Email</label>
+                        <input type="email" id="regEmail" class="form-control" placeholder="email@example.com">
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-lock"></i> Пароль</label>
+                        <input type="password" id="regPassword" class="form-control" placeholder="••••••••">
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-lock"></i> Подтвердите пароль</label>
+                        <input type="password" id="regConfirmPassword" class="form-control" placeholder="••••••••">
+                    </div>
+                    <div id="registerError" class="error-message"></div>
+                    <button class="btn btn-login" onclick="register()">
+                        <i class="fas fa-user-plus"></i> Зарегистрироваться
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="container">
         <!-- Навигация -->
         <nav class="navbar">
@@ -36,7 +97,6 @@
             </div>
             
             <div class="equipment-list">
-                <!-- Станок №1 -->
                 <div class="equipment-card">
                     <div class="equipment-header">
                         <h3><i class="fas fa-server"></i> Станок №1</h3>
@@ -46,20 +106,13 @@
                         </div>
                     </div>
                     <div class="equipment-info">
-                        <div class="equipment-info-item">
-                            <strong>Тип:</strong> Фрезерный станок
-                        </div>
-                        <div class="equipment-info-item">
-                            <strong>Место:</strong> Цех А, участок 1
-                        </div>
-                        <div class="equipment-info-item">
-                            <strong>COM-порт:</strong> 192.168.1.101
-                        </div>
+                        <div class="equipment-info-item"><strong>Тип:</strong> Фрезерный станок</div>
+                        <div class="equipment-info-item"><strong>Место:</strong> Цех А, участок 1</div>
+                        <div class="equipment-info-item"><strong>COM-порт:</strong> 192.168.1.101</div>
                     </div>
                     <button class="btn" onclick="configureEquipment(1)">Настроить</button>
                 </div>
                 
-                <!-- Станок №2 -->
                 <div class="equipment-card">
                     <div class="equipment-header">
                         <h3><i class="fas fa-server"></i> Станок №2</h3>
@@ -69,20 +122,13 @@
                         </div>
                     </div>
                     <div class="equipment-info">
-                        <div class="equipment-info-item">
-                            <strong>Тип:</strong> Токарный станок
-                        </div>
-                        <div class="equipment-info-item">
-                            <strong>Место:</strong> Цех А, участок 2
-                        </div>
-                        <div class="equipment-info-item">
-                            <strong>COM-порт:</strong> 192.168.1.102
-                        </div>
+                        <div class="equipment-info-item"><strong>Тип:</strong> Токарный станок</div>
+                        <div class="equipment-info-item"><strong>Место:</strong> Цех А, участок 2</div>
+                        <div class="equipment-info-item"><strong>COM-порт:</strong> 192.168.1.102</div>
                     </div>
                     <button class="btn" onclick="configureEquipment(2)">Настроить</button>
                 </div>
                 
-                <!-- Пресс №1 -->
                 <div class="equipment-card">
                     <div class="equipment-header">
                         <h3><i class="fas fa-server"></i> Пресс №1</h3>
@@ -92,15 +138,9 @@
                         </div>
                     </div>
                     <div class="equipment-info">
-                        <div class="equipment-info-item">
-                            <strong>Тип:</strong> Гидравлический пресс
-                        </div>
-                        <div class="equipment-info-item">
-                            <strong>Место:</strong> Цех Б, участок 1
-                        </div>
-                        <div class="equipment-info-item">
-                            <strong>COM-порт:</strong> 192.168.1.103
-                        </div>
+                        <div class="equipment-info-item"><strong>Тип:</strong> Гидравлический пресс</div>
+                        <div class="equipment-info-item"><strong>Место:</strong> Цех Б, участок 1</div>
+                        <div class="equipment-info-item"><strong>COM-порт:</strong> 192.168.1.103</div>
                     </div>
                     <button class="btn" onclick="configureEquipment(3)">Настроить</button>
                 </div>
@@ -112,64 +152,40 @@
             </div>
             
             <div class="sensors-grid">
-                <!-- Температура -->
                 <div class="sensor-card">
                     <div class="sensor-header">
-                        <div class="sensor-title">
-                            <i class="fas fa-thermometer-half" style="color: #e17055;"></i>
-                            <span>Температура</span>
-                        </div>
-                        <div class="sensor-status">
-                            <i class="fas fa-circle" id="tempStatusIcon" style="color: #00b894;"></i>
-                        </div>
+                        <div class="sensor-title"><i class="fas fa-thermometer-half" style="color: #e17055;"></i><span>Температура</span></div>
+                        <div class="sensor-status"><i class="fas fa-circle" id="tempStatusIcon" style="color: #00b894;"></i></div>
                     </div>
                     <div class="sensor-value" id="temperature">--</div>
                     <div class="sensor-unit">°C</div>
                     <div class="sensor-desc" id="tempStatus">Статус: Норма</div>
                 </div>
                 
-                <!-- Влажность -->
                 <div class="sensor-card">
                     <div class="sensor-header">
-                        <div class="sensor-title">
-                            <i class="fas fa-tint" style="color: #0984e3;"></i>
-                            <span>Влажность</span>
-                        </div>
-                        <div class="sensor-status">
-                            <i class="fas fa-circle" id="humStatusIcon" style="color: #00b894;"></i>
-                        </div>
+                        <div class="sensor-title"><i class="fas fa-tint" style="color: #0984e3;"></i><span>Влажность</span></div>
+                        <div class="sensor-status"><i class="fas fa-circle" id="humStatusIcon" style="color: #00b894;"></i></div>
                     </div>
                     <div class="sensor-value" id="humidity">--</div>
                     <div class="sensor-unit">%</div>
                     <div class="sensor-desc" id="humStatus">Статус: Норма</div>
                 </div>
                 
-                <!-- Вибрации -->
                 <div class="sensor-card">
                     <div class="sensor-header">
-                        <div class="sensor-title">
-                            <i class="fas fa-vibrate" style="color: #00b894;"></i>
-                            <span>Вибрации</span>
-                        </div>
-                        <div class="sensor-status">
-                            <i class="fas fa-circle" id="vibStatusIcon" style="color: #00b894;"></i>
-                        </div>
+                        <div class="sensor-title"><i class="fas fa-vibrate" style="color: #00b894;"></i><span>Вибрации</span></div>
+                        <div class="sensor-status"><i class="fas fa-circle" id="vibStatusIcon" style="color: #00b894;"></i></div>
                     </div>
                     <div class="sensor-value" id="vibrations">0</div>
                     <div class="sensor-unit">уд/мин</div>
                     <div class="sensor-desc">Всего ударов: <span id="totalHits">0</span></div>
                 </div>
                 
-                <!-- Риск -->
                 <div class="sensor-card">
                     <div class="sensor-header">
-                        <div class="sensor-title">
-                            <i class="fas fa-exclamation-triangle" style="color: #d63031;"></i>
-                            <span>Риск отказа</span>
-                        </div>
-                        <div class="sensor-status">
-                            <i class="fas fa-circle" id="riskStatusIcon" style="color: #00b894;"></i>
-                        </div>
+                        <div class="sensor-title"><i class="fas fa-exclamation-triangle" style="color: #d63031;"></i><span>Риск отказа</span></div>
+                        <div class="sensor-status"><i class="fas fa-circle" id="riskStatusIcon" style="color: #00b894;"></i></div>
                     </div>
                     <div class="sensor-value" id="riskScore">0%</div>
                     <div class="sensor-desc" id="riskLevel">Уровень: Низкий</div>
@@ -180,56 +196,28 @@
             <div class="charts-section">
                 <div class="section-header">
                     <h2><i class="fas fa-chart-line"></i> Графики (последние 60 минут)</h2>
-                    <button class="btn btn-sm" onclick="refreshCharts()">
-                        <i class="fas fa-sync"></i> Обновить
-                    </button>
+                    <button class="btn btn-sm" onclick="refreshCharts()"><i class="fas fa-sync"></i> Обновить</button>
                 </div>
                 
                 <div class="charts-grid">
-                    <!-- Температура -->
                     <div class="chart-container">
-                        <div class="chart-title">
-                            <i class="fas fa-thermometer-half" style="color: #e17055;"></i>
-                            Температура (°C)
-                        </div>
-                        <div class="chart-wrapper">
-                            <canvas id="tempChart"></canvas>
-                        </div>
+                        <div class="chart-title"><i class="fas fa-thermometer-half" style="color: #e17055;"></i> Температура (°C)</div>
+                        <div class="chart-wrapper"><canvas id="tempChart"></canvas></div>
                     </div>
-                    
-                    <!-- Влажность -->
                     <div class="chart-container">
-                        <div class="chart-title">
-                            <i class="fas fa-tint" style="color: #0984e3;"></i>
-                            Влажность (%)
-                        </div>
-                        <div class="chart-wrapper">
-                            <canvas id="humChart"></canvas>
-                        </div>
+                        <div class="chart-title"><i class="fas fa-tint" style="color: #0984e3;"></i> Влажность (%)</div>
+                        <div class="chart-wrapper"><canvas id="humChart"></canvas></div>
                     </div>
-                    
-                    <!-- Вибрации -->
                     <div class="chart-container">
-                        <div class="chart-title">
-                            <i class="fas fa-vibrate" style="color: #00b894;"></i>
-                            Вибрации (уд/мин)
-                        </div>
-                        <div class="chart-wrapper">
-                            <canvas id="vibChart"></canvas>
-                        </div>
+                        <div class="chart-title"><i class="fas fa-vibrate" style="color: #00b894;"></i> Вибрации (уд/мин)</div>
+                        <div class="chart-wrapper"><canvas id="vibChart"></canvas></div>
                     </div>
                 </div>
                 
                 <div class="chart-controls" style="margin-top: 15px; display: flex; gap: 10px;">
-                    <button class="btn btn-sm" onclick="zoomChart('out')">
-                        <i class="fas fa-search-minus"></i> Уменьшить
-                    </button>
-                    <button class="btn btn-sm" onclick="zoomChart('in')">
-                        <i class="fas fa-search-plus"></i> Увеличить
-                    </button>
-                    <button class="btn btn-sm" onclick="resetChartZoom()">
-                        <i class="fas fa-expand-arrows-alt"></i> Сбросить
-                    </button>
+                    <button class="btn btn-sm" onclick="zoomChart('out')"><i class="fas fa-search-minus"></i> Уменьшить</button>
+                    <button class="btn btn-sm" onclick="zoomChart('in')"><i class="fas fa-search-plus"></i> Увеличить</button>
+                    <button class="btn btn-sm" onclick="resetChartZoom()"><i class="fas fa-expand-arrows-alt"></i> Сбросить</button>
                 </div>
             </div>
 
@@ -243,7 +231,7 @@
                     <div class="chat-messages" id="aiChatFull">
                         <div class="message ai">
                             <div class="message-content">
-                                <div class="message-sender">AI:</div>
+                                <div class="message-sender">🤖 AI:</div>
                                 <div class="message-text">Здравствуйте! Я ваш AI ассистент для промышленного мониторинга. Чем могу помочь?</div>
                             </div>
                             <div class="message-time">Только что</div>
@@ -252,9 +240,7 @@
                     
                     <div class="chat-input">
                         <input type="text" id="userInput" placeholder="Введите ваш вопрос или команду для AI ассистента...">
-                        <button class="btn" onclick="sendUserMessage()">
-                            <i class="fas fa-paper-plane"></i> Отправить
-                        </button>
+                        <button class="btn" onclick="sendUserMessage()"><i class="fas fa-paper-plane"></i> Отправить</button>
                     </div>
                 </div>
             </div>
@@ -268,27 +254,12 @@
             </div>
             
             <div class="settings-grid">
-                <!-- Температура -->
                 <div class="parameter-group">
-                    <div class="parameter-header">
-                        <h3><i class="fas fa-thermometer-half"></i> Температура (°C)</h3>
-                    </div>
+                    <div class="parameter-header"><h3><i class="fas fa-thermometer-half"></i> Температура (°C)</h3></div>
                     <div class="parameter-controls">
-                        <div class="parameter-item">
-                            <label class="parameter-label">Минимальное значение:</label>
-                            <input type="number" class="parameter-input" value="20" min="-50" max="150">
-                            <span class="parameter-unit">°C</span>
-                        </div>
-                        <div class="parameter-item">
-                            <label class="parameter-label">Максимальное значение:</label>
-                            <input type="number" class="parameter-input" value="75" min="-50" max="150">
-                            <span class="parameter-unit">°C</span>
-                        </div>
-                        <div class="parameter-item">
-                            <label class="parameter-label">Критическое значение:</label>
-                            <input type="number" class="parameter-input" value="80" min="-50" max="150">
-                            <span class="parameter-unit">°C</span>
-                        </div>
+                        <div class="parameter-item"><label class="parameter-label">Минимальное значение:</label><input type="number" class="parameter-input" value="20" min="-50" max="150"><span class="parameter-unit">°C</span></div>
+                        <div class="parameter-item"><label class="parameter-label">Максимальное значение:</label><input type="number" class="parameter-input" value="75" min="-50" max="150"><span class="parameter-unit">°C</span></div>
+                        <div class="parameter-item"><label class="parameter-label">Критическое значение:</label><input type="number" class="parameter-input" value="80" min="-50" max="150"><span class="parameter-unit">°C</span></div>
                     </div>
                     <div class="parameter-summary">
                         <p><strong>Норма:</strong> <span id="tempNormal">20 - 75 °C</span></p>
@@ -297,27 +268,12 @@
                     </div>
                 </div>
                 
-                <!-- Давление -->
                 <div class="parameter-group">
-                    <div class="parameter-header">
-                        <h3><i class="fas fa-tachometer-alt"></i> Давление (бар)</h3>
-                    </div>
+                    <div class="parameter-header"><h3><i class="fas fa-tachometer-alt"></i> Давление (бар)</h3></div>
                     <div class="parameter-controls">
-                        <div class="parameter-item">
-                            <label class="parameter-label">Минимальное значение:</label>
-                            <input type="number" class="parameter-input" value="5" min="0" max="100">
-                            <span class="parameter-unit">bar</span>
-                        </div>
-                        <div class="parameter-item">
-                            <label class="parameter-label">Максимальное значение:</label>
-                            <input type="number" class="parameter-input" value="10" min="0" max="100">
-                            <span class="parameter-unit">bar</span>
-                        </div>
-                        <div class="parameter-item">
-                            <label class="parameter-label">Критическое значение:</label>
-                            <input type="number" class="parameter-input" value="12" min="0" max="100">
-                            <span class="parameter-unit">bar</span>
-                        </div>
+                        <div class="parameter-item"><label class="parameter-label">Минимальное значение:</label><input type="number" class="parameter-input" value="5" min="0" max="100"><span class="parameter-unit">bar</span></div>
+                        <div class="parameter-item"><label class="parameter-label">Максимальное значение:</label><input type="number" class="parameter-input" value="10" min="0" max="100"><span class="parameter-unit">bar</span></div>
+                        <div class="parameter-item"><label class="parameter-label">Критическое значение:</label><input type="number" class="parameter-input" value="12" min="0" max="100"><span class="parameter-unit">bar</span></div>
                     </div>
                     <div class="parameter-summary">
                         <p><strong>Норма:</strong> <span id="pressureNormal">5 - 10 бар</span></p>
@@ -326,27 +282,12 @@
                     </div>
                 </div>
                 
-                <!-- Вибрация -->
                 <div class="parameter-group">
-                    <div class="parameter-header">
-                        <h3><i class="fas fa-vibrate"></i> Вибрация (мм/с)</h3>
-                    </div>
+                    <div class="parameter-header"><h3><i class="fas fa-vibrate"></i> Вибрация (мм/с)</h3></div>
                     <div class="parameter-controls">
-                        <div class="parameter-item">
-                            <label class="parameter-label">Минимальное значение:</label>
-                            <input type="number" class="parameter-input" value="0" min="0" max="50">
-                            <span class="parameter-unit">mm/s</span>
-                        </div>
-                        <div class="parameter-item">
-                            <label class="parameter-label">Максимальное значение:</label>
-                            <input type="number" class="parameter-input" value="6" min="0" max="50">
-                            <span class="parameter-unit">mm/s</span>
-                        </div>
-                        <div class="parameter-item">
-                            <label class="parameter-label">Критическое значение:</label>
-                            <input type="number" class="parameter-input" value="8" min="0" max="50">
-                            <span class="parameter-unit">mm/s</span>
-                        </div>
+                        <div class="parameter-item"><label class="parameter-label">Минимальное значение:</label><input type="number" class="parameter-input" value="0" min="0" max="50"><span class="parameter-unit">mm/s</span></div>
+                        <div class="parameter-item"><label class="parameter-label">Максимальное значение:</label><input type="number" class="parameter-input" value="6" min="0" max="50"><span class="parameter-unit">mm/s</span></div>
+                        <div class="parameter-item"><label class="parameter-label">Критическое значение:</label><input type="number" class="parameter-input" value="8" min="0" max="50"><span class="parameter-unit">mm/s</span></div>
                     </div>
                     <div class="parameter-summary">
                         <p><strong>Норма:</strong> <span id="vibNormal">0 - 6 мм/с</span></p>
@@ -357,12 +298,8 @@
             </div>
             
             <div class="settings-actions">
-                <button class="btn btn-success" onclick="saveSettings()">
-                    <i class="fas fa-save"></i> Сохранить изменения
-                </button>
-                <button class="btn" onclick="resetSettings()">
-                    <i class="fas fa-undo"></i> Сбросить
-                </button>
+                <button class="btn btn-success" onclick="saveSettings()"><i class="fas fa-save"></i> Сохранить изменения</button>
+                <button class="btn" onclick="resetSettings()"><i class="fas fa-undo"></i> Сбросить</button>
             </div>
         </div>
 
@@ -377,36 +314,18 @@
                 <div class="form-group">
                     <label><i class="far fa-calendar"></i> Период данных</label>
                     <div class="date-range">
-                        <div class="date-input">
-                            <label>Дата начала</label>
-                            <input type="date" id="startDate" class="form-control" value="2025-11-14">
-                        </div>
-                        <div class="date-input">
-                            <label>Дата окончания</label>
-                            <input type="date" id="endDate" class="form-control" value="2025-11-14">
-                        </div>
+                        <div class="date-input"><label>Дата начала</label><input type="date" id="startDate" class="form-control" value="2025-11-14"></div>
+                        <div class="date-input"><label>Дата окончания</label><input type="date" id="endDate" class="form-control" value="2025-11-14"></div>
                     </div>
                 </div>
                 
                 <div class="form-group">
                     <label><i class="fas fa-sliders-h"></i> Параметры для экспорта</label>
                     <div class="checkbox-group">
-                        <div class="checkbox-item">
-                            <input type="checkbox" id="expTemp" checked>
-                            <label for="expTemp">Температура</label>
-                        </div>
-                        <div class="checkbox-item">
-                            <input type="checkbox" id="expPressure" checked>
-                            <label for="expPressure">Давление</label>
-                        </div>
-                        <div class="checkbox-item">
-                            <input type="checkbox" id="expVibration" checked>
-                            <label for="expVibration">Вибрация</label>
-                        </div>
-                        <div class="checkbox-item">
-                            <input type="checkbox" id="expHumidity" checked>
-                            <label for="expHumidity">Влажность</label>
-                        </div>
+                        <div class="checkbox-item"><input type="checkbox" id="expTemp" checked><label for="expTemp">Температура</label></div>
+                        <div class="checkbox-item"><input type="checkbox" id="expPressure" checked><label for="expPressure">Давление</label></div>
+                        <div class="checkbox-item"><input type="checkbox" id="expVibration" checked><label for="expVibration">Вибрация</label></div>
+                        <div class="checkbox-item"><input type="checkbox" id="expHumidity" checked><label for="expHumidity">Влажность</label></div>
                     </div>
                 </div>
                 
@@ -423,28 +342,15 @@
                 <div class="form-group">
                     <label><i class="fas fa-file-export"></i> Формат файла</label>
                     <div class="radio-group">
-                        <div class="radio-item">
-                            <input type="radio" id="formatCsv" name="format" value="csv" checked>
-                            <label for="formatCsv">CSV (Comma Separated Values)</label>
-                        </div>
-                        <div class="radio-item">
-                            <input type="radio" id="formatExcel" name="format" value="excel">
-                            <label for="formatExcel">Excel (XLSX)</label>
-                        </div>
-                        <div class="radio-item">
-                            <input type="radio" id="formatJson" name="format" value="json">
-                            <label for="formatJson">JSON</label>
-                        </div>
+                        <div class="radio-item"><input type="radio" id="formatCsv" name="format" value="csv" checked><label for="formatCsv">CSV (Comma Separated Values)</label></div>
+                        <div class="radio-item"><input type="radio" id="formatExcel" name="format" value="excel"><label for="formatExcel">Excel (XLSX)</label></div>
+                        <div class="radio-item"><input type="radio" id="formatJson" name="format" value="json"><label for="formatJson">JSON</label></div>
                     </div>
                 </div>
                 
                 <div class="export-actions">
-                    <button class="btn btn-success" onclick="exportData()">
-                        <i class="fas fa-download"></i> Экспортировать данные
-                    </button>
-                    <button class="btn" onclick="previewExport()">
-                        <i class="fas fa-eye"></i> Предварительный просмотр
-                    </button>
+                    <button class="btn btn-success" onclick="exportData()"><i class="fas fa-download"></i> Экспортировать данные</button>
+                    <button class="btn" onclick="previewExport()"><i class="fas fa-eye"></i> Предварительный просмотр</button>
                 </div>
             </div>
         </div>
@@ -468,15 +374,11 @@
                 </div>
                 
                 <div class="upload-area" id="dropZone" ondrop="handleDrop(event)" ondragover="handleDragOver(event)">
-                    <div class="upload-icon">
-                        <i class="fas fa-file-upload"></i>
-                    </div>
+                    <div class="upload-icon"><i class="fas fa-file-upload"></i></div>
                     <h3>Перетащите CSV файл сюда или выберите файл</h3>
                     <p class="upload-hint">Поддерживаются файлы формата CSV с данными мониторинга</p>
                     <input type="file" id="fileInput" accept=".csv" style="display: none;" onchange="handleFileSelect(event)">
-                    <button class="btn" onclick="document.getElementById('fileInput').click()">
-                        <i class="fas fa-folder-open"></i> Выбрать файл
-                    </button>
+                    <button class="btn" onclick="document.getElementById('fileInput').click()"><i class="fas fa-folder-open"></i> Выбрать файл</button>
                     <div id="fileInfo" class="file-info"></div>
                 </div>
                 
@@ -491,12 +393,8 @@
                 </div>
                 
                 <div class="upload-actions">
-                    <button class="btn btn-success" onclick="uploadFile()" id="uploadBtn" disabled>
-                        <i class="fas fa-upload"></i> Загрузить данные
-                    </button>
-                    <button class="btn" onclick="clearUpload()">
-                        <i class="fas fa-times"></i> Очистить
-                    </button>
+                    <button class="btn btn-success" onclick="uploadFile()" id="uploadBtn" disabled><i class="fas fa-upload"></i> Загрузить данные</button>
+                    <button class="btn" onclick="clearUpload()"><i class="fas fa-times"></i> Очистить</button>
                 </div>
             </div>
         </div>
@@ -515,72 +413,32 @@
                         <h2 id="profileName">Иван Петров</h2>
                         <p class="profile-role" id="profileRole">Инженер по оборудованию</p>
                     </div>
-                    
                     <div class="profile-stats">
-                        <div class="stat-item">
-                            <div class="stat-label">Активных станков</div>
-                            <div class="stat-value">2</div>
-                        </div>
-                        <div class="stat-item">
-                            <div class="stat-label">Дней работы</div>
-                            <div class="stat-value">45</div>
-                        </div>
-                        <div class="stat-item">
-                            <div class="stat-label">Всего оповещений</div>
-                            <div class="stat-value">12</div>
-                        </div>
+                        <div class="stat-item"><div class="stat-label">Активных станков</div><div class="stat-value">2</div></div>
+                        <div class="stat-item"><div class="stat-label">Дней работы</div><div class="stat-value">45</div></div>
+                        <div class="stat-item"><div class="stat-label">Всего оповещений</div><div class="stat-value">12</div></div>
                     </div>
                 </div>
                 
                 <div class="profile-content">
                     <div class="profile-section">
                         <h3><i class="fas fa-user-edit"></i> Информация о пользователе</h3>
-                        
                         <div class="profile-form">
                             <div class="form-row">
-                                <div class="form-group">
-                                    <label>Полное имя</label>
-                                    <input type="text" id="fullName" class="form-control" value="Иван Петров">
-                                </div>
-                                <div class="form-group">
-                                    <label>Email</label>
-                                    <input type="email" id="email" class="form-control" value="ivan.petrov@company.ru">
-                                </div>
+                                <div class="form-group"><label>Полное имя</label><input type="text" id="fullName" class="form-control" value="Иван Петров"></div>
+                                <div class="form-group"><label>Email</label><input type="email" id="email" class="form-control" value="ivan.petrov@company.ru"></div>
                             </div>
-                            
                             <div class="form-row">
-                                <div class="form-group">
-                                    <label>Телефон</label>
-                                    <input type="tel" id="phone" class="form-control" value="+7 (495) 123-45-67">
-                                </div>
-                                <div class="form-group">
-                                    <label>Отдел</label>
-                                    <select id="department" class="form-control">
-                                        <option>Производственный отдел</option>
-                                        <option>Технический отдел</option>
-                                        <option>Отдел контроля качества</option>
-                                    </select>
-                                </div>
+                                <div class="form-group"><label>Телефон</label><input type="tel" id="phone" class="form-control" value="+7 (495) 123-45-67"></div>
+                                <div class="form-group"><label>Отдел</label><select id="department" class="form-control"><option>Производственный отдел</option><option>Технический отдел</option><option>Отдел контроля качества</option></select></div>
                             </div>
-                            
                             <div class="form-row">
-                                <div class="form-group">
-                                    <label>Должность</label>
-                                    <input type="text" id="position" class="form-control" value="Инженер по оборудованию">
-                                </div>
-                                <div class="form-group">
-                                    <label>Дата начала работы</label>
-                                    <input type="date" id="startDate" class="form-control" value="2025-01-15">
-                                </div>
+                                <div class="form-group"><label>Должность</label><input type="text" id="position" class="form-control" value="Инженер по оборудованию"></div>
+                                <div class="form-group"><label>Дата начала работы</label><input type="date" id="startDateProfile" class="form-control" value="2025-01-15"></div>
                             </div>
-                            
                             <div class="profile-actions">
-                                <button class="btn btn-success" onclick="saveProfile()">
-                                    <i class="fas fa-save"></i> Сохранить изменения
-                                </button>
-                                <button class="btn" onclick="resetProfile()">
-                                    <i class="fas fa-undo"></i> Сбросить
-                                </button>
+                                <button class="btn btn-success" onclick="saveProfile()"><i class="fas fa-save"></i> Сохранить изменения</button>
+                                <button class="btn" onclick="resetProfile()"><i class="fas fa-undo"></i> Сбросить</button>
                             </div>
                         </div>
                     </div>
@@ -588,22 +446,10 @@
                     <div class="profile-section">
                         <h3><i class="fas fa-bell"></i> Настройки уведомлений</h3>
                         <div class="notification-settings">
-                            <div class="checkbox-item">
-                                <input type="checkbox" id="notifyEmail" checked>
-                                <label for="notifyEmail">Email уведомления</label>
-                            </div>
-                            <div class="checkbox-item">
-                                <input type="checkbox" id="notifySms" checked>
-                                <label for="notifySms">SMS уведомления</label>
-                            </div>
-                            <div class="checkbox-item">
-                                <input type="checkbox" id="notifyCritical" checked>
-                                <label for="notifyCritical">Критические оповещения</label>
-                            </div>
-                            <div class="checkbox-item">
-                                <input type="checkbox" id="notifyWarnings">
-                                <label for="notifyWarnings">Предупреждения</label>
-                            </div>
+                            <div class="checkbox-item"><input type="checkbox" id="notifyEmail" checked><label for="notifyEmail">Email уведомления</label></div>
+                            <div class="checkbox-item"><input type="checkbox" id="notifySms" checked><label for="notifySms">SMS уведомления</label></div>
+                            <div class="checkbox-item"><input type="checkbox" id="notifyCritical" checked><label for="notifyCritical">Критические оповещения</label></div>
+                            <div class="checkbox-item"><input type="checkbox" id="notifyWarnings"><label for="notifyWarnings">Предупреждения</label></div>
                         </div>
                     </div>
                 </div>
@@ -616,13 +462,11 @@
                 <h4><i class="fas fa-info-circle"></i> Пром Мониторинг</h4>
                 <p>Система промышленного мониторинга для предотвращения простоя оборудования</p>
             </div>
-            
             <div class="footer-section">
                 <h4><i class="fas fa-address-book"></i> Контакты</h4>
                 <p>Email: info@prommonitoring.ru</p>
                 <p>Телефон: +7 (495) 123-45-67</p>
             </div>
-            
             <div class="footer-section">
                 <h4><i class="fas fa-headset"></i> Поддержка</h4>
                 <p>Техническая поддержка</p>

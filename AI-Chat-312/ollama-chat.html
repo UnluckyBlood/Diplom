@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Ollama Chat</title>
+    <style>
+        body { font-family: Arial; margin: 20px; }
+        #chat { border:1px solid #ccc; padding:10px; height:400px; overflow-y:auto; }
+        .msg { margin:5px 0; padding:8px; border-radius:5px; }
+        .user { background:#e3f2fd; text-align:right; }
+        .ai { background:#f5f5f5; }
+        input[type="text"] { width:70%; padding:10px; }
+        button { padding:10px; }
+    </style>
+</head>
+<body>
+    <h1>🤖 Ollama Chat (Прямое подключение)</h1>
+    
+    <div>
+        <strong>Ollama URL:</strong> 
+        <input type="text" id="ollamaUrl" value="http://localhost:11434" size="40">
+        <button onclick="testOllama()">Проверить Ollama</button>
+        <span id="status"></span>
+    </div>
+    
+    <div>
+        <strong>Модель:</strong>
+        <select id="modelSelect">
+            <option value="mistral:7b">mistral:7b</option>
+        </select>
+    </div>
+    
+    <div id="chat"></div>
+    
+    <div style="margin-top:20px;">
+        <input type="text" id="input" placeholder="Введите вопрос..." style="width:500px;">
+        <button onclick="send()">Отправить</button>
+        <button onclick="clearChat()">Очистить</button>
+    </div>
+    
+    <script>
+        async function testOllama() {
+            const url = document.getElementById('ollamaUrl').value;
+            const status = document.getElementById('status');
+            
+            try {
+                const response = await fetch(url + '/api/tags');
+                if (response.ok) {
+                    const data = await response.json();
+                    status.innerHTML = '✅ Ollama работает (' + data.models.length + ' моделей)';
+                    status.style.color = 'green';
+                }
+            } catch(e) {
+                status.innerHTML = '❌ Ошибка: ' + e.message;
+                status.style.color = 'red';
+            }
+        }
+        
+        async function send() {
+            const input = document.getElementById('input');
+            const text = input.value.trim();
+            if (!text) return;
+            
+            addMsg('user', text);
+            input.value = '';
+            
+            const chat = document.getElementById('chat');
+            const thinking = document.createElement('div');
+            thinking.className = 'msg ai';
+            thinking.innerHTML = '<em>Думаю...</em>';
+            chat.appendChild(thinking);
+            
+            try {
+                const response = await fetch('http://localhost:11434/api/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        model: document.getElementById('modelSelect').value,
+                        prompt: text,
+                        stream: false
+                    })
+                });
+                
+                chat.removeChild(thinking);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    addMsg('ai', data.response);
+                } else {
+                    addMsg('ai', '❌ Ошибка API: ' + response.status);
+                }
+            } catch(e) {
+                chat.removeChild(thinking);
+                addMsg('ai', '❌ Ошибка сети: ' + e.message);
+            }
+        }
+        
+        function addMsg(role, text) {
+            const chat = document.getElementById('chat');
+            const msg = document.createElement('div');
+            msg.className = 'msg ' + role;
+            msg.innerHTML = '<strong>' + (role === 'user' ? 'Вы' : 'AI') + ':</strong> ' + text.replace(/\n/g, '<br>');
+            chat.appendChild(msg);
+            chat.scrollTop = chat.scrollHeight;
+        }
+        
+        function clearChat() {
+            document.getElementById('chat').innerHTML = '';
+        }
+        
+        // Автопроверка при загрузке
+        window.onload = testOllama;
+        
+        // Отправка по Enter
+        document.getElementById('input').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') send();
+        });
+    </script>
+</body>
+</html>
