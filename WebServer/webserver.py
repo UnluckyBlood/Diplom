@@ -1,7 +1,6 @@
-﻿# webserver.py - ПОЛНЫЙ ИСПРАВЛЕННЫЙ КОД С JWT АУТЕНТИФИКАЦИЕЙ И OLLAMA
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, Form, Query, Depends, HTTPException, status
+﻿from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, Query, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
@@ -11,7 +10,6 @@ import sqlite3
 import uvicorn
 import os
 import csv
-import sys
 import hashlib
 import secrets
 from io import StringIO
@@ -19,6 +17,7 @@ from typing import List, Optional
 import jwt
 from jwt import PyJWTError
 import requests
+from contextlib import asynccontextmanager
 
 # КОНСТАНТЫ
 DB_NAME = 'sensor_data.db'
@@ -64,9 +63,6 @@ class AIRecommendationRequest(BaseModel):
     message: str
     type: str = "info"
     parameters: dict = {}
-
-app = FastAPI(title="Пром Мониторинг")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 security = HTTPBearer()
 
@@ -295,9 +291,7 @@ def init_database():
     conn.close()
     print("✅ База данных инициализирована")
 
-# Используем lifespan вместо on_event (современный подход)
-from contextlib import asynccontextmanager
-
+# Lifespan для управления стартом и остановкой
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
@@ -451,6 +445,33 @@ async def receive_data(data: dict):
         print(f"❌ Ошибка приема данных: {e}")
         return {"status": "error", "message": str(e)}
 
+# ---------- AI и рекомендации ----------
+async def add_ai_recommendation(data: dict):
+    """Добавление AI рекомендации в БД и broadcast (если не чат)"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('INSERT INTO ai_recommendations (timestamp, message, type, parameters) VALUES (?, ?, ?, ?)',
+                      (data.get("timestamp", datetime.now().isoformat()),
+                       data.get("message", ""),
+                       data.get("type", "info"),
+                       data.get("parameters", "{}")))
+        
+        conn.commit()
+        conn.close()
+        
+        # Отправляем broadcast только если это не сообщение чата (чтобы избежать дублирования)
+        if data.get("type") != "chat":
+            await manager.broadcast(json.dumps({
+                "type": "ai_recommendation",
+                "data": data,
+                "timestamp": datetime.now().isoformat()
+            }))
+        
+    except Exception as e:
+        print(f"❌ Ошибка добавления рекомендации: {e}")
+
 @app.post("/api/ai/chat")
 async def ai_chat(request: ChatRequest, username: str = Depends(verify_token)):
     """Обработка AI чата с использованием Ollama"""
@@ -509,33 +530,9 @@ async def ai_chat(request: ChatRequest, username: str = Depends(verify_token)):
         print(f"❌ Ошибка AI чата: {e}")
         return {"status": "error", "message": str(e)}
 
-async def add_ai_recommendation(data):
-    """Добавление AI рекомендации"""
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute('INSERT INTO ai_recommendations (timestamp, message, type, parameters) VALUES (?, ?, ?, ?)',
-                      (data.get("timestamp", datetime.now().isoformat()),
-                       data.get("message", ""),
-                       data.get("type", "info"),
-                       data.get("parameters", "{}")))
-        
-        conn.commit()
-        conn.close()
-        
-        await manager.broadcast(json.dumps({
-            "type": "ai_recommendation",
-            "data": data,
-            "timestamp": datetime.now().isoformat()
-        }))
-        
-    except Exception as e:
-        print(f"❌ Ошибка добавления рекомендации: {e}")
-
 @app.post("/api/ai/add_recommendation")
 async def add_recommendation(request: AIRecommendationRequest):
-    """Добавление AI рекомендации (для main.py)"""
+    """Добавление AI рекомендации (для внешних вызовов)"""
     try:
         await add_ai_recommendation({
             "timestamp": datetime.now().isoformat(),
@@ -549,32 +546,36 @@ async def add_recommendation(request: AIRecommendationRequest):
         return {"status": "error", "message": str(e)}
 
 @app.get("/api/ai/recommendations")
-async def add_ai_recommendation(data):
-    """Добавление AI рекомендации"""
+async def get_ai_recommendations(limit: int = Query(10, ge=1, le=100), username: str = Depends(verify_token)):
+    """Получение списка AI рекомендаций (GET)"""
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        
-        cursor.execute('INSERT INTO ai_recommendations (timestamp, message, type, parameters) VALUES (?, ?, ?, ?)',
-                      (data.get("timestamp", datetime.now().isoformat()),
-                       data.get("message", ""),
-                       data.get("type", "info"),
-                       data.get("parameters", "{}")))
-        
-        conn.commit()
+        cursor.execute('''
+            SELECT id, timestamp, message, type, parameters
+            FROM ai_recommendations
+            ORDER BY timestamp DESC
+            LIMIT ?
+        ''', (limit,))
+        rows = cursor.fetchall()
         conn.close()
         
-        # Отправляем broadcast только если это не сообщение чата (чтобы избежать дублирования)
-        if data.get("type") != "chat":
-            await manager.broadcast(json.dumps({
-                "type": "ai_recommendation",
-                "data": data,
-                "timestamp": datetime.now().isoformat()
-            }))
+        recommendations = []
+        for row in rows:
+            recommendations.append({
+                "id": row["id"],
+                "timestamp": row["timestamp"],
+                "message": row["message"],
+                "type": row["type"],
+                "parameters": json.loads(row["parameters"]) if row["parameters"] else {}
+            })
         
+        return {"status": "success", "recommendations": recommendations}
     except Exception as e:
-        print(f"❌ Ошибка добавления рекомендации: {e}")
-        
+        print(f"❌ Ошибка получения рекомендаций: {e}")
+        return {"status": "error", "message": str(e), "recommendations": []}
+
+# ---------- Основные данные ----------
 @app.get("/api/current")
 async def get_current_data(username: str = Depends(verify_token)):
     """Текущие данные"""
@@ -646,6 +647,7 @@ async def websocket_endpoint(websocket: WebSocket):
         print(f"❌ WebSocket ошибка: {e}")
         manager.disconnect(websocket)
 
+# ---------- Настройки и профиль ----------
 @app.post("/api/save_settings")
 async def save_settings(request: SettingsRequest, username: str = Depends(verify_token)):
     """Сохранение настроек"""
@@ -756,6 +758,7 @@ async def get_profile(username: str = Depends(verify_token)):
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
+# ---------- Загрузка файлов ----------
 @app.post("/api/upload")
 async def upload_file(file: UploadFile = File(...), username: str = Depends(verify_token)):
     """Загрузка CSV файла"""
@@ -786,6 +789,7 @@ async def upload_file(file: UploadFile = File(...), username: str = Depends(veri
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
+# ---------- Статус ----------
 @app.get("/api/status")
 async def get_status():
     """Статус системы"""
