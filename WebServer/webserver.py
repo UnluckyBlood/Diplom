@@ -21,7 +21,7 @@ from contextlib import asynccontextmanager
 
 # КОНСТАНТЫ
 DB_NAME = 'sensor_data.db'
-HOST = "0.0.0.0"
+HOST = "localhost"
 PORT = 8000
 
 # JWT настройки
