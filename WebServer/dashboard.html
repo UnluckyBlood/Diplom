@@ -20,7 +20,7 @@
                     <button class="tab-btn active" onclick="switchTab('login')">Вход</button>
                     <button class="tab-btn" onclick="switchTab('register')">Регистрация</button>
                 </div>
-                
+
                 <div id="loginForm" class="login-form active">
                     <div class="form-group">
                         <label><i class="fas fa-user"></i> Имя пользователя</label>
@@ -38,7 +38,7 @@
                         <p><i class="fas fa-info-circle"></i> Тестовый пользователь: <strong>admin</strong> / <strong>admin123</strong></p>
                     </div>
                 </div>
-                
+
                 <div id="registerForm" class="login-form">
                     <div class="form-group">
                         <label><i class="fas fa-user"></i> Имя пользователя</label>
@@ -81,6 +81,7 @@
                 <a href="#" class="nav-link" onclick="showPage('settings')">Настройки</a>
                 <a href="#" class="nav-link" onclick="showPage('export')">Экспорт</a>
                 <a href="#" class="nav-link" onclick="showPage('upload')">Загрузка</a>
+                <a href="#" class="nav-link" onclick="showPage('documents')">Документы AI</a>
                 <a href="#" class="nav-link" onclick="showPage('profile')">Профиль</a>
             </div>
             <div class="user-menu">
@@ -95,7 +96,7 @@
                 <h1><i class="fas fa-tools"></i> Управление оборудованием</h1>
                 <p>Список подключенного промышленного оборудования</p>
             </div>
-            
+
             <div class="equipment-list">
                 <div class="equipment-card">
                     <div class="equipment-header">
@@ -112,7 +113,7 @@
                     </div>
                     <button class="btn" onclick="configureEquipment(1)">Настроить</button>
                 </div>
-                
+
                 <div class="equipment-card">
                     <div class="equipment-header">
                         <h3><i class="fas fa-server"></i> Станок №2</h3>
@@ -128,7 +129,7 @@
                     </div>
                     <button class="btn" onclick="configureEquipment(2)">Настроить</button>
                 </div>
-                
+
                 <div class="equipment-card">
                     <div class="equipment-header">
                         <h3><i class="fas fa-server"></i> Пресс №1</h3>
@@ -150,7 +151,7 @@
             <div class="page-header" style="margin-top: 40px;">
                 <h1><i class="fas fa-microchip"></i> Мониторинг в реальном времени</h1>
             </div>
-            
+
             <div class="sensors-grid">
                 <div class="sensor-card">
                     <div class="sensor-header">
@@ -161,7 +162,7 @@
                     <div class="sensor-unit">°C</div>
                     <div class="sensor-desc" id="tempStatus">Статус: Норма</div>
                 </div>
-                
+
                 <div class="sensor-card">
                     <div class="sensor-header">
                         <div class="sensor-title"><i class="fas fa-tint" style="color: #0984e3;"></i><span>Влажность</span></div>
@@ -171,7 +172,7 @@
                     <div class="sensor-unit">%</div>
                     <div class="sensor-desc" id="humStatus">Статус: Норма</div>
                 </div>
-                
+
                 <div class="sensor-card">
                     <div class="sensor-header">
                         <div class="sensor-title"><i class="fas fa-vibrate" style="color: #00b894;"></i><span>Вибрации</span></div>
@@ -181,7 +182,7 @@
                     <div class="sensor-unit">уд/мин</div>
                     <div class="sensor-desc">Всего ударов: <span id="totalHits">0</span></div>
                 </div>
-                
+
                 <div class="sensor-card">
                     <div class="sensor-header">
                         <div class="sensor-title"><i class="fas fa-exclamation-triangle" style="color: #d63031;"></i><span>Риск отказа</span></div>
@@ -198,7 +199,7 @@
                     <h2><i class="fas fa-chart-line"></i> Графики (последние 60 минут)</h2>
                     <button class="btn btn-sm" onclick="refreshCharts()"><i class="fas fa-sync"></i> Обновить</button>
                 </div>
-                
+
                 <div class="charts-grid">
                     <div class="chart-container">
                         <div class="chart-title"><i class="fas fa-thermometer-half" style="color: #e17055;"></i> Температура (°C)</div>
@@ -213,7 +214,7 @@
                         <div class="chart-wrapper"><canvas id="vibChart"></canvas></div>
                     </div>
                 </div>
-                
+
                 <div class="chart-controls" style="margin-top: 15px; display: flex; gap: 10px;">
                     <button class="btn btn-sm" onclick="zoomChart('out')"><i class="fas fa-search-minus"></i> Уменьшить</button>
                     <button class="btn btn-sm" onclick="zoomChart('in')"><i class="fas fa-search-plus"></i> Увеличить</button>
@@ -226,7 +227,7 @@
                 <div class="section-header">
                     <h2><i class="fas fa-robot"></i> AI Ассистент</h2>
                 </div>
-                
+
                 <div class="chat-container">
                     <div class="chat-messages" id="aiChatFull">
                         <div class="message ai">
@@ -237,7 +238,7 @@
                             <div class="message-time">Только что</div>
                         </div>
                     </div>
-                    
+
                     <div class="chat-input">
                         <input type="text" id="userInput" placeholder="Введите ваш вопрос или команду для AI ассистента...">
                         <button class="btn" onclick="sendUserMessage()"><i class="fas fa-paper-plane"></i> Отправить</button>
@@ -252,7 +253,7 @@
                 <h1><i class="fas fa-sliders-h"></i> Настройка параметров</h1>
                 <p>Установите пороговые значения для мониторинга оборудования</p>
             </div>
-            
+
             <div class="settings-grid">
                 <div class="parameter-group">
                     <div class="parameter-header"><h3><i class="fas fa-thermometer-half"></i> Температура (°C)</h3></div>
@@ -267,7 +268,7 @@
                         <p><strong>Опасно:</strong> <span id="tempCritical">80 + °C</span></p>
                     </div>
                 </div>
-                
+
                 <div class="parameter-group">
                     <div class="parameter-header"><h3><i class="fas fa-tachometer-alt"></i> Давление (бар)</h3></div>
                     <div class="parameter-controls">
@@ -281,7 +282,7 @@
                         <p><strong>Опасно:</strong> <span id="pressureCritical">12 + бар</span></p>
                     </div>
                 </div>
-                
+
                 <div class="parameter-group">
                     <div class="parameter-header"><h3><i class="fas fa-vibrate"></i> Вибрация (мм/с)</h3></div>
                     <div class="parameter-controls">
@@ -296,29 +297,29 @@
                     </div>
                 </div>
             </div>
-            
+
             <div class="settings-actions">
                 <button class="btn btn-success" onclick="saveSettings()"><i class="fas fa-save"></i> Сохранить изменения</button>
                 <button class="btn" onclick="resetSettings()"><i class="fas fa-undo"></i> Сбросить</button>
             </div>
         </div>
 
-        <!-- Страница экспорта -->
+        <!-- Страница экспорта (ОБНОВЛЁННАЯ) -->
         <div id="export" class="page">
             <div class="page-header">
                 <h1><i class="fas fa-download"></i> Экспорт данных</h1>
                 <p>Выгрузка данных мониторинга в различных форматах</p>
             </div>
-            
+
             <div class="export-form">
                 <div class="form-group">
                     <label><i class="far fa-calendar"></i> Период данных</label>
                     <div class="date-range">
-                        <div class="date-input"><label>Дата начала</label><input type="date" id="startDate" class="form-control" value="2025-11-14"></div>
-                        <div class="date-input"><label>Дата окончания</label><input type="date" id="endDate" class="form-control" value="2025-11-14"></div>
+                        <div class="date-input"><label>Дата начала</label><input type="date" id="startDate" class="form-control"></div>
+                        <div class="date-input"><label>Дата окончания</label><input type="date" id="endDate" class="form-control"></div>
                     </div>
                 </div>
-                
+
                 <div class="form-group">
                     <label><i class="fas fa-sliders-h"></i> Параметры для экспорта</label>
                     <div class="checkbox-group">
@@ -328,7 +329,7 @@
                         <div class="checkbox-item"><input type="checkbox" id="expHumidity" checked><label for="expHumidity">Влажность</label></div>
                     </div>
                 </div>
-                
+
                 <div class="form-group">
                     <label><i class="fas fa-server"></i> Оборудование</label>
                     <select id="exportEquipment" class="form-control">
@@ -338,16 +339,16 @@
                         <option value="3">Пресс №1</option>
                     </select>
                 </div>
-                
+
                 <div class="form-group">
                     <label><i class="fas fa-file-export"></i> Формат файла</label>
                     <div class="radio-group">
-                        <div class="radio-item"><input type="radio" id="formatCsv" name="format" value="csv" checked><label for="formatCsv">CSV (Comma Separated Values)</label></div>
-                        <div class="radio-item"><input type="radio" id="formatExcel" name="format" value="excel"><label for="formatExcel">Excel (XLSX)</label></div>
+                        <div class="radio-item"><input type="radio" id="formatCsv" name="format" value="csv" checked><label for="formatCsv">CSV</label></div>
                         <div class="radio-item"><input type="radio" id="formatJson" name="format" value="json"><label for="formatJson">JSON</label></div>
+                        <div class="radio-item"><input type="radio" id="formatPdf" name="format" value="pdf"><label for="formatPdf">PDF</label></div>
                     </div>
                 </div>
-                
+
                 <div class="export-actions">
                     <button class="btn btn-success" onclick="exportData()"><i class="fas fa-download"></i> Экспортировать данные</button>
                     <button class="btn" onclick="previewExport()"><i class="fas fa-eye"></i> Предварительный просмотр</button>
@@ -355,13 +356,13 @@
             </div>
         </div>
 
-        <!-- Страница загрузки -->
+        <!-- Страница загрузки CSV -->
         <div id="upload" class="page">
             <div class="page-header">
                 <h1><i class="fas fa-upload"></i> Загрузка данных</h1>
                 <p>Загрузите CSV файл с данными мониторинга оборудования</p>
             </div>
-            
+
             <div class="upload-form">
                 <div class="form-group">
                     <label><i class="fas fa-server"></i> Выберите оборудование для загрузки данных</label>
@@ -372,7 +373,7 @@
                         <option>Пресс №1</option>
                     </select>
                 </div>
-                
+
                 <div class="upload-area" id="dropZone" ondrop="handleDrop(event)" ondragover="handleDragOver(event)">
                     <div class="upload-icon"><i class="fas fa-file-upload"></i></div>
                     <h3>Перетащите CSV файл сюда или выберите файл</h3>
@@ -381,21 +382,38 @@
                     <button class="btn" onclick="document.getElementById('fileInput').click()"><i class="fas fa-folder-open"></i> Выбрать файл</button>
                     <div id="fileInfo" class="file-info"></div>
                 </div>
-                
+
                 <div class="upload-instructions">
                     <h4><i class="fas fa-info-circle"></i> Формат CSV файла</h4>
                     <p>CSV файл должен содержать следующие колонки:</p>
-                    <pre><code>timestamp, temperature, humidity, hits_per_minute, hit_count
-
-2025-01-01 10:00:00,72.4,45.2,12.5,1250
-2025-01-01 10:01:00,72.6,45.1,12.8,1252
-2025-01-01 10:02:00,72.3,45.3,12.3,1254</code></pre>
+                    <pre><code>timestamp, temperature, humidity, hits_per_minute, hit_count</code></pre>
                 </div>
-                
+
                 <div class="upload-actions">
                     <button class="btn btn-success" onclick="uploadFile()" id="uploadBtn" disabled><i class="fas fa-upload"></i> Загрузить данные</button>
                     <button class="btn" onclick="clearUpload()"><i class="fas fa-times"></i> Очистить</button>
                 </div>
+            </div>
+        </div>
+
+        <!-- НОВАЯ СТРАНИЦА: Документы AI -->
+        <div id="documents" class="page">
+            <div class="page-header">
+                <h1><i class="fas fa-file-alt"></i> Документы AI</h1>
+                <p>Загрузите инструкции и руководства для использования AI ассистентом (TXT, PDF)</p>
+            </div>
+            <div class="upload-form">
+                <div class="form-group">
+                    <label><i class="fas fa-upload"></i> Загрузить документ</label>
+                    <input type="file" id="docFileInput" accept=".txt,.pdf" style="display:none" onchange="handleDocFileSelect(event)">
+                    <button class="btn" onclick="document.getElementById('docFileInput').click()"><i class="fas fa-folder-open"></i> Выбрать файл</button>
+                    <button class="btn btn-success" id="uploadDocBtn" onclick="uploadDocument()" disabled><i class="fas fa-upload"></i> Загрузить</button>
+                </div>
+                <div id="docFileInfo" class="file-info"></div>
+            </div>
+            <div class="documents-list">
+                <h3>Загруженные документы</h3>
+                <div id="documentsTable" class="table-responsive"></div>
             </div>
         </div>
 
@@ -405,7 +423,7 @@
                 <h1><i class="fas fa-user-circle"></i> Личный кабинет</h1>
                 <p>Управление профилем и настройками аккаунта</p>
             </div>
-            
+
             <div class="profile-container">
                 <div class="profile-sidebar">
                     <div class="profile-avatar">
@@ -419,7 +437,7 @@
                         <div class="stat-item"><div class="stat-label">Всего оповещений</div><div class="stat-value">12</div></div>
                     </div>
                 </div>
-                
+
                 <div class="profile-content">
                     <div class="profile-section">
                         <h3><i class="fas fa-user-edit"></i> Информация о пользователе</h3>
@@ -442,7 +460,7 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     <div class="profile-section">
                         <h3><i class="fas fa-bell"></i> Настройки уведомлений</h3>
                         <div class="notification-settings">
@@ -471,6 +489,19 @@
                 <h4><i class="fas fa-headset"></i> Поддержка</h4>
                 <p>Техническая поддержка</p>
                 <p>Документация</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно предпросмотра -->
+    <div id="previewModal" class="modal" style="display: none;">
+        <div class="modal-content preview-content">
+            <div class="modal-header">
+                <h2>Предварительный просмотр данных</h2>
+                <button class="close-btn" onclick="closePreview()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="table-responsive" id="previewTableContainer"></div>
             </div>
         </div>
     </div>

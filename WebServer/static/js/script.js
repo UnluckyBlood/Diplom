@@ -1,4 +1,4 @@
-// script.js - ПОЛНЫЙ КОД С JWT АУТЕНТИФИКАЦИЕЙ
+// script.js - ПОЛНЫЙ КОД С JWT АУТЕНТИФИКАЦИЕЙ И ВСЕМИ ФУНКЦИЯМИ
 let ws, tempChart, humChart, vibChart, selectedFile = null;
 let lastDataTime = null;
 let authToken = null;
@@ -14,16 +14,19 @@ let currentMinute = null;
 let minuteInterval;
 let chartHistory = [];
 
+// Новая переменная для документа
+let selectedDocFile = null;
+
 // ============ АУТЕНТИФИКАЦИЯ ============
 
 function checkAuth() {
     const token = localStorage.getItem('auth_token');
     const user = localStorage.getItem('current_user');
-    
+
     if (token && user) {
         authToken = token;
         currentUser = JSON.parse(user);
-        
+
         fetch('/api/auth/verify', {
             headers: {
                 'Authorization': `Bearer ${token}`
@@ -49,14 +52,14 @@ function login() {
     const username = document.getElementById('loginUsername').value;
     const password = document.getElementById('loginPassword').value;
     const errorDiv = document.getElementById('loginError');
-    
+
     if (!username || !password) {
         errorDiv.textContent = '❌ Заполните все поля';
         return;
     }
-    
+
     errorDiv.textContent = '⏳ Вход...';
-    
+
     fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -89,24 +92,24 @@ function register() {
     const password = document.getElementById('regPassword').value;
     const confirmPassword = document.getElementById('regConfirmPassword').value;
     const errorDiv = document.getElementById('registerError');
-    
+
     if (!username || !fullName || !email || !password) {
         errorDiv.textContent = '❌ Заполните все поля';
         return;
     }
-    
+
     if (password !== confirmPassword) {
         errorDiv.textContent = '❌ Пароли не совпадают';
         return;
     }
-    
+
     if (password.length < 6) {
         errorDiv.textContent = '❌ Пароль должен быть не менее 6 символов';
         return;
     }
-    
+
     errorDiv.textContent = '⏳ Регистрация...';
-    
+
     fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -137,11 +140,11 @@ function logout() {
     localStorage.removeItem('current_user');
     authToken = null;
     currentUser = null;
-    
+
     if (ws) {
         ws.close();
     }
-    
+
     showLoginModal();
 }
 
@@ -151,7 +154,7 @@ function updateUserInterface() {
         if (userNameSpan) {
             userNameSpan.textContent = currentUser.full_name || currentUser.username;
         }
-        
+
         const userMenu = document.querySelector('.user-menu');
         if (userMenu && !document.getElementById('logoutBtn')) {
             const logoutBtn = document.createElement('button');
@@ -184,9 +187,9 @@ function switchTab(tab) {
     const loginForm = document.getElementById('loginForm');
     const registerForm = document.getElementById('registerForm');
     const tabs = document.querySelectorAll('.tab-btn');
-    
+
     tabs.forEach(btn => btn.classList.remove('active'));
-    
+
     if (tab === 'login') {
         loginForm.classList.add('active');
         registerForm.classList.remove('active');
@@ -214,16 +217,16 @@ function showPage(pageId) {
     document.querySelectorAll('.page').forEach(page => {
         page.classList.remove('active');
     });
-    
+
     document.getElementById(pageId).classList.add('active');
-    
+
     document.querySelectorAll('.nav-link').forEach(link => {
         link.classList.remove('active');
     });
     if (event && event.target) {
         event.target.classList.add('active');
     }
-    
+
     if (pageId === 'dashboard') {
         setTimeout(() => {
             loadInitialData();
@@ -231,11 +234,21 @@ function showPage(pageId) {
             loadAIRecommendations();
         }, 100);
     }
-    
+
     if (pageId === 'settings') {
         setTimeout(loadSettings, 100);
     }
-    
+
+    if (pageId === 'documents') {
+        setTimeout(loadDocuments, 100);
+    }
+
+    if (pageId === 'export') {
+        const today = new Date().toISOString().split('T')[0];
+        if (document.getElementById('startDate')) document.getElementById('startDate').value = today;
+        if (document.getElementById('endDate')) document.getElementById('endDate').value = today;
+    }
+
     if (pageId === 'profile') {
         setTimeout(loadProfile, 100);
     }
@@ -246,7 +259,7 @@ function showPage(pageId) {
 function generateTimeLabels(count = 60) {
     const now = new Date();
     const labels = [];
-    
+
     for (let i = count - 1; i >= 0; i--) {
         const time = new Date(now.getTime() - i * 60000);
         const hours = time.getHours().toString().padStart(2, '0');
@@ -259,16 +272,16 @@ function generateTimeLabels(count = 60) {
 function aggregateMinuteData(data) {
     const now = new Date();
     const currentMinuteKey = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-    
+
     if (currentMinute !== currentMinuteKey && currentMinute !== null) {
         processMinuteBuffer();
         currentMinute = currentMinuteKey;
     }
-    
+
     if (currentMinute === null) {
         currentMinute = currentMinuteKey;
     }
-    
+
     if (data.temperature !== undefined) {
         minuteBuffers.temperature.push(data.temperature);
     }
@@ -281,12 +294,12 @@ function aggregateMinuteData(data) {
 }
 
 function processMinuteBuffer() {
-    if (minuteBuffers.temperature.length === 0 && 
-        minuteBuffers.humidity.length === 0 && 
+    if (minuteBuffers.temperature.length === 0 &&
+        minuteBuffers.humidity.length === 0 &&
         minuteBuffers.vibrations.length === 0) {
         return;
     }
-    
+
     const now = new Date();
     const aggregatedData = {
         timestamp: `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`,
@@ -295,7 +308,7 @@ function processMinuteBuffer() {
         humidity: 0,
         hits_per_minute: 0
     };
-    
+
     if (minuteBuffers.temperature.length > 0) {
         aggregatedData.temperature = Math.max(...minuteBuffers.temperature);
     }
@@ -305,15 +318,15 @@ function processMinuteBuffer() {
     if (minuteBuffers.vibrations.length > 0) {
         aggregatedData.hits_per_minute = Math.max(...minuteBuffers.vibrations);
     }
-    
+
     chartHistory.push(aggregatedData);
-    
+
     if (chartHistory.length > 60) {
         chartHistory = chartHistory.slice(-60);
     }
-    
+
     updateChartsWithHistory();
-    
+
     minuteBuffers = {
         temperature: [],
         humidity: [],
@@ -323,24 +336,24 @@ function processMinuteBuffer() {
 
 function updateChartsWithHistory() {
     if (chartHistory.length === 0) return;
-    
+
     const labels = generateTimeLabels(chartHistory.length);
     const temps = chartHistory.map(d => d.temperature);
     const hums = chartHistory.map(d => d.humidity);
     const vibes = chartHistory.map(d => d.hits_per_minute);
-    
+
     if (tempChart) {
         tempChart.data.labels = labels;
         tempChart.data.datasets[0].data = temps;
         tempChart.update('none');
     }
-    
+
     if (humChart) {
         humChart.data.labels = labels;
         humChart.data.datasets[0].data = hums;
         humChart.update('none');
     }
-    
+
     if (vibChart) {
         vibChart.data.labels = labels;
         vibChart.data.datasets[0].data = vibes;
@@ -350,11 +363,11 @@ function updateChartsWithHistory() {
 
 function aggregateHistoryDataByMinute(data) {
     const aggregated = {};
-    
+
     data.forEach(item => {
         const timestamp = new Date(item.timestamp);
         const minuteKey = `${timestamp.getHours().toString().padStart(2, '0')}:${timestamp.getMinutes().toString().padStart(2, '0')}`;
-        
+
         if (!aggregated[minuteKey]) {
             aggregated[minuteKey] = {
                 timestamp: minuteKey,
@@ -371,7 +384,7 @@ function aggregateHistoryDataByMinute(data) {
             aggregated[minuteKey].count++;
         }
     });
-    
+
     return Object.values(aggregated).sort((a, b) => new Date(a.fullTimestamp) - new Date(b.fullTimestamp));
 }
 
@@ -380,16 +393,16 @@ function createCharts(historyData) {
         createEmptyCharts();
         return;
     }
-    
+
     const labels = generateTimeLabels(historyData.length);
     const temps = historyData.map(d => d.temperature);
     const hums = historyData.map(d => d.humidity);
     const vibes = historyData.map(d => d.hits_per_minute);
-    
+
     const commonOptions = {
         responsive: true,
         maintainAspectRatio: false,
-        plugins: { 
+        plugins: {
             legend: { display: false },
             tooltip: {
                 mode: 'index',
@@ -402,7 +415,7 @@ function createCharts(historyData) {
             }
         },
         scales: {
-            y: { 
+            y: {
                 beginAtZero: false,
                 grid: { color: 'rgba(0,0,0,0.05)', drawBorder: false },
                 ticks: { font: { size: 10 }, padding: 5 }
@@ -434,7 +447,7 @@ function createCharts(historyData) {
         interaction: { intersect: false, mode: 'index' },
         layout: { padding: { left: 0, right: 0, top: 0, bottom: 20 } }
     };
-    
+
     const tempCtx = document.getElementById('tempChart');
     if (tempCtx) {
         if (tempChart) tempChart.destroy();
@@ -444,7 +457,7 @@ function createCharts(historyData) {
             options: commonOptions
         });
     }
-    
+
     const humCtx = document.getElementById('humChart');
     if (humCtx) {
         if (humChart) humChart.destroy();
@@ -454,7 +467,7 @@ function createCharts(historyData) {
             options: commonOptions
         });
     }
-    
+
     const vibCtx = document.getElementById('vibChart');
     if (vibCtx) {
         if (vibChart) vibChart.destroy();
@@ -469,21 +482,21 @@ function createCharts(historyData) {
 function createEmptyCharts() {
     const emptyLabels = ['Нет данных'];
     const emptyValues = [0];
-    
+
     const configs = [
         { id: 'tempChart', color: '#e17055', label: 'Температура' },
         { id: 'humChart', color: '#0984e3', label: 'Влажность' },
         { id: 'vibChart', color: '#00b894', label: 'Вибрации' }
     ];
-    
+
     configs.forEach(config => {
         const canvas = document.getElementById(config.id);
         if (!canvas) return;
-        
+
         if (config.id === 'tempChart' && tempChart) tempChart.destroy();
         if (config.id === 'humChart' && humChart) humChart.destroy();
         if (config.id === 'vibChart' && vibChart) vibChart.destroy();
-        
+
         new Chart(canvas.getContext('2d'), {
             type: 'line',
             data: { labels: emptyLabels, datasets: [{ label: config.label, data: emptyValues, borderColor: config.color, backgroundColor: config.color + '20', borderWidth: 2, fill: true }] },
@@ -520,36 +533,36 @@ function updateDashboard(data) {
         const temp = data.temperature.toFixed(1);
         const tempElement = document.getElementById('temperature');
         if (tempElement) tempElement.textContent = temp;
-        
+
         let tempStatus = 'Норма';
         let tempColor = '#00b894';
         if (data.temperature > 35) { tempStatus = 'Критично'; tempColor = '#e17055'; }
         else if (data.temperature > 30) { tempStatus = 'Повышена'; tempColor = '#fdcb6e'; }
         else if (data.temperature < 15) { tempStatus = 'Низкая'; tempColor = '#0984e3'; }
-        
+
         const tempStatusElement = document.getElementById('tempStatus');
         const tempStatusIcon = document.getElementById('tempStatusIcon');
         if (tempStatusElement) { tempStatusElement.textContent = `Статус: ${tempStatus}`; tempStatusElement.style.color = tempColor; }
         if (tempStatusIcon) tempStatusIcon.style.color = tempColor;
     }
-    
+
     if (data.humidity !== undefined) {
         const hum = data.humidity.toFixed(1);
         const humElement = document.getElementById('humidity');
         if (humElement) humElement.textContent = hum;
-        
+
         let humStatus = 'Норма';
         let humColor = '#00b894';
         if (data.humidity > 80) { humStatus = 'Высокая'; humColor = '#e17055'; }
         else if (data.humidity > 60) { humStatus = 'Повышена'; humColor = '#fdcb6e'; }
         else if (data.humidity < 20) { humStatus = 'Низкая'; humColor = '#0984e3'; }
-        
+
         const humStatusElement = document.getElementById('humStatus');
         const humStatusIcon = document.getElementById('humStatusIcon');
         if (humStatusElement) { humStatusElement.textContent = `Статус: ${humStatus}`; humStatusElement.style.color = humColor; }
         if (humStatusIcon) humStatusIcon.style.color = humColor;
     }
-    
+
     if (data.hits_per_minute !== undefined) {
         const hits = parseFloat(data.hits_per_minute);
         const vibElement = document.getElementById('vibrations');
@@ -561,13 +574,13 @@ function updateDashboard(data) {
             else if (hits > 10) vibColor = '#00b894';
             else vibColor = '#667eea';
             vibElement.style.color = vibColor;
-            
+
             const vibStatusIcon = document.getElementById('vibStatusIcon');
             if (vibStatusIcon) vibStatusIcon.style.color = vibColor;
         }
         updateRiskFromHits(hits);
     }
-    
+
     if (data.hit_count !== undefined) {
         const totalHitsElement = document.getElementById('totalHits');
         if (totalHitsElement) totalHitsElement.textContent = data.hit_count;
@@ -576,17 +589,17 @@ function updateDashboard(data) {
 
 function updateRiskFromHits(hitsPerMinute) {
     let riskPercent, riskLevel, riskColor;
-    
+
     if (hitsPerMinute > 30) { riskPercent = 90; riskLevel = 'Критический'; riskColor = '#e17055'; }
     else if (hitsPerMinute > 20) { riskPercent = 70; riskLevel = 'Высокий'; riskColor = '#fdcb6e'; }
     else if (hitsPerMinute > 10) { riskPercent = 50; riskLevel = 'Средний'; riskColor = '#00b894'; }
     else if (hitsPerMinute > 5) { riskPercent = 30; riskLevel = 'Низкий'; riskColor = '#667eea'; }
     else { riskPercent = 10; riskLevel = 'Минимальный'; riskColor = '#667eea'; }
-    
+
     const riskScoreElement = document.getElementById('riskScore');
     const riskLevelElement = document.getElementById('riskLevel');
     const riskStatusIcon = document.getElementById('riskStatusIcon');
-    
+
     if (riskScoreElement) { riskScoreElement.textContent = `${riskPercent}%`; riskScoreElement.style.color = riskColor; }
     if (riskLevelElement) { riskLevelElement.textContent = `Уровень: ${riskLevel}`; riskLevelElement.style.color = riskColor; }
     if (riskStatusIcon) riskStatusIcon.style.color = riskColor;
@@ -606,7 +619,7 @@ async function loadCharts() {
     try {
         const response = await apiFetch(`/api/history?hours=1&_=${Date.now()}`);
         const historyData = await response.json();
-        
+
         if (Array.isArray(historyData) && historyData.length > 0) {
             const aggregatedData = aggregateHistoryDataByMinute(historyData);
             chartHistory = aggregatedData.length > 60 ? aggregatedData.slice(-60) : aggregatedData;
@@ -626,14 +639,14 @@ async function loadAIRecommendations() {
     try {
         const response = await apiFetch('/api/ai/recommendations?limit=5');
         const recommendations = await response.json();
-        
+
         if (Array.isArray(recommendations) && recommendations.length > 0) {
             const chatDiv = document.getElementById('aiChatFull');
             if (chatDiv) {
                 const welcomeMessage = chatDiv.querySelector('.message.ai');
                 chatDiv.innerHTML = '';
                 if (welcomeMessage) chatDiv.appendChild(welcomeMessage);
-                
+
                 recommendations.slice().reverse().forEach(rec => {
                     if (rec.message) {
                         const message = rec.message;
@@ -656,25 +669,24 @@ async function loadAIRecommendations() {
 
 async function sendUserMessage() {
     if (!authToken) {
-        console.log("📤 sendUserMessage вызвана, сообщение:", message);
         alert('Пожалуйста, войдите в систему');
         return;
     }
-    
+
     const userInput = document.getElementById('userInput');
     const message = userInput.value.trim();
     if (!message) return;
-    
+
     addChatMessage(message, 'user');
     userInput.value = '';
-    
+
     try {
         const response = await apiFetch('/api/ai/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ message: message })
         });
-        
+
         const data = await response.json();
         if (data.status === 'success') {
             addChatMessage(data.response, 'ai');
@@ -690,14 +702,14 @@ async function sendUserMessage() {
 function addChatMessage(text, sender, timestamp = null) {
     const chatDiv = document.getElementById('aiChatFull');
     if (!chatDiv) return;
-    
+
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${sender}`;
-    
+
     const timeStr = timestamp ? new Date(timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
     const senderName = sender === 'user' ? 'Вы:' : 'AI:';
     const senderIcon = sender === 'user' ? '👤' : '🤖';
-    
+
     messageDiv.innerHTML = `
         <div class="message-content">
             <div class="message-sender">${senderIcon} ${senderName}</div>
@@ -705,7 +717,7 @@ function addChatMessage(text, sender, timestamp = null) {
         </div>
         <div class="message-time">${timeStr}</div>
     `;
-    
+
     chatDiv.appendChild(messageDiv);
     chatDiv.scrollTop = chatDiv.scrollHeight;
 }
@@ -716,11 +728,11 @@ async function loadSettings() {
     try {
         const response = await apiFetch('/api/get_settings');
         const data = await response.json();
-        
+
         if (data.status === 'success') {
             const settings = data.settings;
             const inputs = document.querySelectorAll('.parameter-input');
-            
+
             inputs.forEach(input => {
                 const val = input.defaultValue;
                 if (val === '20') input.value = settings.temperature_min || '20';
@@ -733,7 +745,7 @@ async function loadSettings() {
                 else if (val === '6') input.value = settings.vibration_max || '6';
                 else if (val === '8') input.value = settings.vibration_critical || '8';
             });
-            
+
             updateSettingsDisplay();
         }
     } catch (error) {
@@ -751,21 +763,21 @@ function updateSettingsDisplay() {
     const vibMin = document.querySelector('.parameter-input[value="0"]')?.value || '0';
     const vibMax = document.querySelector('.parameter-input[value="6"]')?.value || '6';
     const vibCritical = document.querySelector('.parameter-input[value="8"]')?.value || '8';
-    
+
     const tempNormal = document.getElementById('tempNormal');
     const tempHigh = document.getElementById('tempHigh');
     const tempCriticalSpan = document.getElementById('tempCritical');
     if (tempNormal) tempNormal.textContent = `${tempMin} - ${tempMax} °C`;
     if (tempHigh) tempHigh.textContent = `${tempMax} + °C`;
     if (tempCriticalSpan) tempCriticalSpan.textContent = `${tempCritical} + °C`;
-    
+
     const pressureNormal = document.getElementById('pressureNormal');
     const pressureHigh = document.getElementById('pressureHigh');
     const pressureCriticalSpan = document.getElementById('pressureCritical');
     if (pressureNormal) pressureNormal.textContent = `${pressureMin} - ${pressureMax} бар`;
     if (pressureHigh) pressureHigh.textContent = `${pressureMax} + бар`;
     if (pressureCriticalSpan) pressureCriticalSpan.textContent = `${pressureCritical} + бар`;
-    
+
     const vibNormal = document.getElementById('vibNormal');
     const vibHigh = document.getElementById('vibHigh');
     const vibCriticalSpan = document.getElementById('vibCritical');
@@ -792,14 +804,14 @@ async function saveSettings() {
             critical: document.querySelector('.parameter-input[value="8"]')?.value || '8'
         }
     };
-    
+
     try {
         const response = await apiFetch('/api/save_settings', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(settings)
         });
-        
+
         const data = await response.json();
         if (data.status === 'success') {
             updateSettingsDisplay();
@@ -828,24 +840,24 @@ async function loadProfile() {
         const data = await response.json();
         if (data.status === 'success') {
             const profile = data.profile;
-            
+
             const fullNameInput = document.getElementById('fullName');
             const emailInput = document.getElementById('email');
             const phoneInput = document.getElementById('phone');
             const departmentSelect = document.getElementById('department');
             const positionInput = document.getElementById('position');
-            
+
             if (fullNameInput) fullNameInput.value = profile.fullName;
             if (emailInput) emailInput.value = profile.email;
             if (phoneInput) phoneInput.value = profile.phone;
             if (departmentSelect) departmentSelect.value = profile.department;
             if (positionInput) positionInput.value = profile.position;
-            
+
             const profileName = document.getElementById('profileName');
             const profileRole = document.getElementById('profileRole');
             if (profileName) profileName.textContent = profile.fullName;
             if (profileRole) profileRole.textContent = profile.position;
-            
+
             const userNameSpan = document.getElementById('userName');
             if (userNameSpan && currentUser) userNameSpan.textContent = profile.fullName;
         }
@@ -862,34 +874,34 @@ async function saveProfile() {
         department: document.getElementById('department')?.value || '',
         position: document.getElementById('position')?.value || ''
     };
-    
+
     if (!profile.fullName || !profile.email) {
         alert('❌ Заполните обязательные поля: Имя и Email');
         return;
     }
-    
+
     try {
         const response = await apiFetch('/api/save_profile', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(profile)
         });
-        
+
         const data = await response.json();
         if (data.status === 'success') {
             const profileName = document.getElementById('profileName');
             const profileRole = document.getElementById('profileRole');
             if (profileName) profileName.textContent = profile.fullName;
             if (profileRole) profileRole.textContent = profile.position;
-            
+
             const userNameSpan = document.getElementById('userName');
             if (userNameSpan) userNameSpan.textContent = profile.fullName;
-            
+
             if (currentUser) {
                 currentUser.full_name = profile.fullName;
                 localStorage.setItem('current_user', JSON.stringify(currentUser));
             }
-            
+
             alert('✅ Профиль успешно сохранен!');
         } else {
             alert(`❌ Ошибка: ${data.message}`);
@@ -910,17 +922,67 @@ function configureEquipment(id) {
     alert(`⚙️ Настройка оборудования №${id}\nФункционал в разработке`);
 }
 
-// ============ ЭКСПОРТ ============
+// ============ ЭКСПОРТ (НОВЫЕ РЕАЛИЗОВАННЫЕ ФУНКЦИИ) ============
 
-function exportData() {
-    alert('📊 Функция экспорта данных в разработке');
+async function exportData() {
+    const format = document.querySelector('input[name="format"]:checked')?.value || 'csv';
+    const startDate = document.getElementById('startDate')?.value;
+    const endDate = document.getElementById('endDate')?.value;
+    let url = `/api/export/${format === 'pdf' ? 'pdf' : 'data'}?`;
+    if (startDate) url += `start_date=${startDate}&`;
+    if (endDate) url += `end_date=${endDate}&`;
+    if (format !== 'pdf') url += `format=${format}`;
+
+    try {
+        if (format === 'pdf' || format === 'csv') {
+            const response = await apiFetch(url);
+            const blob = await response.blob();
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = format === 'pdf' ? 'report.pdf' : 'data.csv';
+            link.click();
+        } else if (format === 'json') {
+            const response = await apiFetch(url);
+            const data = await response.json();
+            const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = 'data.json';
+            link.click();
+        }
+    } catch (e) {
+        alert('Ошибка экспорта: ' + e.message);
+    }
 }
 
-function previewExport() {
-    alert('👁️ Предварительный просмотр экспорта');
+async function previewExport() {
+    try {
+        const resp = await apiFetch('/api/history?hours=24');
+        const data = await resp.json();
+        const container = document.getElementById('previewTableContainer');
+        let html = '<table class="data-table"><thead><tr><th>Время</th><th>Темп.</th><th>Влажн.</th><th>Вибр.</th><th>Удары</th></tr></thead><tbody>';
+        data.slice(0, 50).forEach(row => {
+            html += `<tr>
+                <td>${row.timestamp}</td>
+                <td>${row.temperature?.toFixed(1) || ''}</td>
+                <td>${row.humidity?.toFixed(1) || ''}</td>
+                <td>${row.hits_per_minute?.toFixed(1) || ''}</td>
+                <td>${row.hit_count || ''}</td>
+            </tr>`;
+        });
+        html += '</tbody></table>';
+        container.innerHTML = html;
+        document.getElementById('previewModal').style.display = 'flex';
+    } catch (e) {
+        alert('Ошибка предпросмотра');
+    }
 }
 
-// ============ ЗАГРУЗКА ФАЙЛОВ ============
+function closePreview() {
+    document.getElementById('previewModal').style.display = 'none';
+}
+
+// ============ ЗАГРУЗКА ФАЙЛОВ (CSV) ============
 
 function handleDragOver(event) {
     event.preventDefault();
@@ -932,7 +994,7 @@ function handleDrop(event) {
     event.preventDefault();
     const dropZone = document.getElementById('dropZone');
     if (dropZone) dropZone.classList.remove('dragover');
-    
+
     const files = event.dataTransfer.files;
     if (files.length > 0) {
         handleFile(files[0]);
@@ -965,16 +1027,16 @@ async function uploadFile() {
         alert('❌ Сначала выберите файл');
         return;
     }
-    
+
     const formData = new FormData();
     formData.append('file', selectedFile);
-    
+
     try {
         const response = await apiFetch('/api/upload', {
             method: 'POST',
             body: formData
         });
-        
+
         const data = await response.json();
         if (data.status === 'success') {
             alert(`✅ ${data.message}`);
@@ -994,10 +1056,79 @@ function clearUpload() {
     const fileInput = document.getElementById('fileInput');
     const fileInfo = document.getElementById('fileInfo');
     const uploadBtn = document.getElementById('uploadBtn');
-    
+
     if (fileInput) fileInput.value = '';
     if (fileInfo) fileInfo.innerHTML = '';
     if (uploadBtn) uploadBtn.disabled = true;
+}
+
+// ============ ДОКУМЕНТЫ AI (НОВЫЕ ФУНКЦИИ) ============
+
+function handleDocFileSelect(event) {
+    const files = event.target.files;
+    if (files.length > 0) {
+        selectedDocFile = files[0];
+        document.getElementById('docFileInfo').innerHTML = `<i class="fas fa-check-circle" style="color:#00b894;"></i> ${selectedDocFile.name} (${(selectedDocFile.size/1024).toFixed(2)} KB)`;
+        document.getElementById('uploadDocBtn').disabled = false;
+    }
+}
+
+async function uploadDocument() {
+    if (!selectedDocFile) return;
+    const formData = new FormData();
+    formData.append('file', selectedDocFile);
+    try {
+        const resp = await apiFetch('/api/documents/upload', { method: 'POST', body: formData });
+        if (!resp.ok) {
+            const errData = await resp.json();
+            alert('Ошибка: ' + (errData.detail || 'Неизвестная ошибка'));
+            return;
+        }
+        const data = await resp.json();
+        if (data.status === 'success') {
+            alert(data.message);
+            selectedDocFile = null;
+            document.getElementById('docFileInput').value = '';
+            document.getElementById('docFileInfo').innerHTML = '';
+            document.getElementById('uploadDocBtn').disabled = true;
+            loadDocuments();
+        } else {
+            alert('Ошибка: ' + (data.message || data.detail || 'Неизвестная ошибка'));
+        }
+    } catch (e) {
+        alert('Ошибка загрузки документа: ' + e.message);
+    }
+}
+
+async function loadDocuments() {
+    try {
+        const resp = await apiFetch('/api/documents');
+        const data = await resp.json();
+        const container = document.getElementById('documentsTable');
+        if (!container) return;
+        if (data.documents.length === 0) {
+            container.innerHTML = '<p>Нет загруженных документов.</p>';
+            return;
+        }
+        let html = '<table class="data-table"><thead><tr><th>Файл</th><th>Дата загрузки</th><th>Действия</th></tr></thead><tbody>';
+        data.documents.forEach(doc => {
+            html += `<tr>
+                <td>${doc.filename}</td>
+                <td>${new Date(doc.created_at).toLocaleString()}</td>
+                <td><button class="btn btn-sm" onclick="deleteDocument(${doc.id})"><i class="fas fa-trash"></i> Удалить</button></td>
+            </tr>`;
+        });
+        html += '</tbody></table>';
+        container.innerHTML = html;
+    } catch (e) {
+        console.error(e);
+    }
+}
+
+async function deleteDocument(id) {
+    if (!confirm('Удалить документ?')) return;
+    await apiFetch(`/api/documents/${id}`, { method: 'DELETE' });
+    loadDocuments();
 }
 
 // ============ WEBSOCKET ============
@@ -1005,23 +1136,23 @@ function clearUpload() {
 function initWebSocket() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}/ws`;
-    
+
     try {
         ws = new WebSocket(wsUrl);
-        
+
         ws.onopen = function() {
             console.log('✅ WebSocket подключен');
             updateWebSocketStatus(true);
             loadInitialData();
             loadCharts();
             loadAIRecommendations();
-            
+
             if (minuteInterval) clearInterval(minuteInterval);
             minuteInterval = setInterval(() => {
                 if (currentMinute !== null) processMinuteBuffer();
             }, 60000);
         };
-        
+
         ws.onmessage = function(event) {
             try {
                 const data = JSON.parse(event.data);
@@ -1042,19 +1173,19 @@ function initWebSocket() {
                 console.error('❌ Ошибка парсинга WebSocket:', e);
             }
         };
-        
+
         ws.onclose = function() {
             console.log('🔌 WebSocket отключен, переподключение через 3 секунды...');
             updateWebSocketStatus(false);
             if (minuteInterval) clearInterval(minuteInterval);
             setTimeout(initWebSocket, 3000);
         };
-        
+
         ws.onerror = function(error) {
             console.error('❌ WebSocket ошибка:', error);
             updateWebSocketStatus(false);
         };
-        
+
     } catch (e) {
         console.error('❌ Ошибка создания WebSocket:', e);
         updateWebSocketStatus(false);
@@ -1077,18 +1208,18 @@ function updateWebSocketStatus(connected) {
 function initApp() {
     initWebSocket();
     showPage('dashboard');
-    
+
     const userInput = document.getElementById('userInput');
     if (userInput) {
         userInput.addEventListener('keypress', function(e) {
             if (e.key === 'Enter') sendUserMessage();
         });
     }
-    
+
     window.addEventListener('resize', function() {
         setTimeout(resizeCharts, 100);
     });
-    
+
     setInterval(loadInitialData, 5000);
     setInterval(loadAIRecommendations, 60000);
 }
@@ -1096,16 +1227,16 @@ function initApp() {
 // Запуск приложения
 document.addEventListener('DOMContentLoaded', () => {
     checkAuth();
-    
+
     const loginPassword = document.getElementById('loginPassword');
     const regConfirmPassword = document.getElementById('regConfirmPassword');
-    
+
     if (loginPassword) {
         loginPassword.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') login();
         });
     }
-    
+
     if (regConfirmPassword) {
         regConfirmPassword.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') register();

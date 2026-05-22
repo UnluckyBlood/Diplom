@@ -1,6 +1,6 @@
 ﻿from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, Query, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
@@ -12,19 +12,35 @@ import os
 import csv
 import hashlib
 import secrets
-from io import StringIO
+from io import StringIO, BytesIO
 from typing import List, Optional
 import jwt
 from jwt import PyJWTError
 import requests
 from contextlib import asynccontextmanager
+# доп библиотеки для PDF могут не работать на всех системах, поэтому оборачиваем в try-except
+try:
+    from PyPDF2 import PdfReader
+    PDF_SUPPORT = True
+except ImportError:
+    PDF_SUPPORT = False
+
+try:
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib import colors
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.units import inch
+    PDF_EXPORT_SUPPORT = True
+except ImportError:
+    PDF_EXPORT_SUPPORT = False
 
 # КОНСТАНТЫ
 DB_NAME = 'sensor_data.db'
 HOST = "localhost"
 PORT = 8000
 
-# JWT настройки
+# JWT настройки желательно закинуть в .env файл и не хранить в коде, но для простоты примера так и чтобы не усложнять при  демке проекта
 SECRET_KEY = "your-super-secret-key-change-in-production-2024"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
@@ -84,7 +100,7 @@ def get_ollama_response(prompt: str, context: str = "") -> str:
     """Получение ответа от локальной Ollama модели"""
     try:
         full_prompt = f"{context}\n\nПользователь: {prompt}\n\nАссистент:"
-        
+
         response = requests.post(
             f"{OLLAMA_URL}/api/generate",
             json={
@@ -99,13 +115,13 @@ def get_ollama_response(prompt: str, context: str = "") -> str:
             },
             timeout=30
         )
-        
+
         if response.status_code == 200:
             data = response.json()
             return data.get('response', "Извините, не удалось получить ответ.")
         else:
             return f"Ошибка Ollama: {response.status_code}"
-            
+
     except requests.exceptions.Timeout:
         return "⚠️ Таймаут ожидания ответа от Ollama. Попробуйте позже."
     except Exception as e:
@@ -161,15 +177,15 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
 class ConnectionManager:
     def __init__(self):
         self.active_connections = []
-    
+
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
         self.active_connections.append(websocket)
-    
+
     def disconnect(self, websocket: WebSocket):
         if websocket in self.active_connections:
             self.active_connections.remove(websocket)
-    
+
     async def broadcast(self, message: str):
         disconnected = []
         for connection in self.active_connections:
@@ -192,7 +208,7 @@ def init_database():
     """Инициализация базы данных"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Таблица пользователей
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
@@ -204,7 +220,7 @@ def init_database():
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     ''')
-    
+
     # Таблица данных сенсоров
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS sensor_data (
@@ -216,7 +232,7 @@ def init_database():
             hits_per_minute REAL DEFAULT 0
         )
     ''')
-    
+
     # Таблица AI рекомендаций
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS ai_recommendations (
@@ -227,7 +243,7 @@ def init_database():
             parameters TEXT
         )
     ''')
-    
+
     # Таблица настроек
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS settings (
@@ -236,7 +252,7 @@ def init_database():
             value TEXT
         )
     ''')
-    
+
     # Таблица профилей
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS profiles (
@@ -250,27 +266,37 @@ def init_database():
             FOREIGN KEY (user_id) REFERENCES users(id)
         )
     ''')
-    
+
+    # Новая таблица для документов AI
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS documents (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            filename TEXT,
+            content TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
     # Создаем тестового пользователя (только если нет пользователей)
     cursor.execute('SELECT COUNT(*) FROM users')
     user_count = cursor.fetchone()[0]
-    
+
     if user_count == 0:
         hashed_pw = hash_password("admin123")
         cursor.execute('''
             INSERT INTO users (username, password, email, full_name)
             VALUES (?, ?, ?, ?)
         ''', ("admin", hashed_pw, "admin@prommonitoring.ru", "Администратор"))
-        
+
         # Получаем ID созданного пользователя
         user_id = cursor.lastrowid
-        
+
         # Создаем профиль для админа
         cursor.execute('''
             INSERT INTO profiles (user_id, full_name, email, phone, department, position)
             VALUES (?, ?, ?, ?, ?, ?)
         ''', (user_id, "Администратор", "admin@prommonitoring.ru", "+7 (495) 123-45-67", "IT отдел", "Системный администратор"))
-    
+
     # Начальные настройки
     default_settings = [
         ('temperature_min', '20'),
@@ -283,10 +309,10 @@ def init_database():
         ('vibration_max', '6'),
         ('vibration_critical', '8')
     ]
-    
+
     for param, value in default_settings:
         cursor.execute('INSERT OR IGNORE INTO settings (parameter, value) VALUES (?, ?)', (param, value))
-    
+
     conn.commit()
     conn.close()
     print("✅ База данных инициализирована")
@@ -301,6 +327,10 @@ async def lifespan(app: FastAPI):
     print(f"🤖 Ollama: {'✅ Доступен' if OLLAMA_AVAILABLE else '❌ Недоступен'}")
     print(f"🔐 JWT аутентификация: ✅ Включена")
     print(f"📝 Тестовый пользователь: admin / admin123")
+    if PDF_SUPPORT: print("📄 Поддержка PDF документов: ✅")
+    else: print("📄 PDF документы: ❌ (установите PyPDF2)")
+    if PDF_EXPORT_SUPPORT: print("📊 Экспорт в PDF: ✅")
+    else: print("📊 Экспорт в PDF: ❌ (установите reportlab)")
     yield
     # Shutdown
     print("🛑 Сервер остановлен")
@@ -334,30 +364,30 @@ async def register(user: UserRegister):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        
+
         cursor.execute('SELECT id FROM users WHERE username = ?', (user.username,))
         if cursor.fetchone():
             conn.close()
             return {"status": "error", "message": "Пользователь уже существует"}
-        
+
         hashed_pw = hash_password(user.password)
         cursor.execute('''
             INSERT INTO users (username, password, email, full_name)
             VALUES (?, ?, ?, ?)
         ''', (user.username, hashed_pw, user.email, user.full_name))
-        
+
         user_id = cursor.lastrowid
-        
+
         cursor.execute('''
             INSERT INTO profiles (user_id, full_name, email, phone, department, position)
             VALUES (?, ?, ?, ?, ?, ?)
         ''', (user_id, user.full_name, user.email, "", "", ""))
-        
+
         conn.commit()
         conn.close()
-        
+
         token = create_access_token(data={"sub": user.username})
-        
+
         return {
             "status": "success",
             "token": token,
@@ -367,7 +397,7 @@ async def register(user: UserRegister):
                 "email": user.email
             }
         }
-        
+
     except Exception as e:
         print(f"❌ Ошибка регистрации: {e}")
         return {"status": "error", "message": str(e)}
@@ -381,15 +411,15 @@ async def login(user: UserLogin):
         cursor.execute('SELECT id, username, password, email, full_name FROM users WHERE username = ?', (user.username,))
         db_user = cursor.fetchone()
         conn.close()
-        
+
         if not db_user:
             return {"status": "error", "message": "Неверное имя пользователя или пароль"}
-        
+
         if not verify_password(user.password, db_user["password"]):
             return {"status": "error", "message": "Неверное имя пользователя или пароль"}
-        
+
         token = create_access_token(data={"sub": user.username})
-        
+
         return {
             "status": "success",
             "token": token,
@@ -400,12 +430,12 @@ async def login(user: UserLogin):
                 "email": db_user["email"]
             }
         }
-        
+
     except Exception as e:
         print(f"❌ Ошибка входа: {e}")
         return {"status": "error", "message": str(e)}
 
-@app.post("/api/auth/verify")
+@app.get("/api/auth/verify")
 async def verify_token_endpoint(username: str = Depends(verify_token)):
     """Проверка валидности токена"""
     return {"status": "success", "username": username}
@@ -419,7 +449,7 @@ async def receive_data(data: dict):
         sensor_data = data.get('data', {})
         conn = get_db_connection()
         cursor = conn.cursor()
-        
+
         cursor.execute('''
             INSERT INTO sensor_data (timestamp, temperature, humidity, hit_count, hits_per_minute)
             VALUES (?, ?, ?, ?, ?)
@@ -430,16 +460,16 @@ async def receive_data(data: dict):
             sensor_data.get('hit_count', 0),
             sensor_data.get('hits_per_minute', 0)
         ))
-        
+
         conn.commit()
         conn.close()
-        
+
         await manager.broadcast(json.dumps({
             'type': 'realtime',
             'data': sensor_data,
             'timestamp': datetime.now().isoformat()
         }))
-        
+
         return {"status": "success"}
     except Exception as e:
         print(f"❌ Ошибка приема данных: {e}")
@@ -451,16 +481,16 @@ async def add_ai_recommendation(data: dict):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        
+
         cursor.execute('INSERT INTO ai_recommendations (timestamp, message, type, parameters) VALUES (?, ?, ?, ?)',
                       (data.get("timestamp", datetime.now().isoformat()),
                        data.get("message", ""),
                        data.get("type", "info"),
                        data.get("parameters", "{}")))
-        
+
         conn.commit()
         conn.close()
-        
+
         # Отправляем broadcast только если это не сообщение чата (чтобы избежать дублирования)
         if data.get("type") != "chat":
             await manager.broadcast(json.dumps({
@@ -468,28 +498,47 @@ async def add_ai_recommendation(data: dict):
                 "data": data,
                 "timestamp": datetime.now().isoformat()
             }))
-        
+
     except Exception as e:
         print(f"❌ Ошибка добавления рекомендации: {e}")
 
 @app.post("/api/ai/chat")
 async def ai_chat(request: ChatRequest, username: str = Depends(verify_token)):
-    """Обработка AI чата с использованием Ollama"""
+    """Обработка AI чата с использованием Ollama (с поиском по документам)"""
     try:
         user_message = request.message
-        
+
+        # Поиск релевантных документов (инструкций)
+        doc_context = ""
+        words = user_message.lower().split()
+        if words:
+            conn_doc = get_db_connection()
+            cursor_doc = conn_doc.cursor()
+            # Простой поиск по ключевым словам
+            placeholders = ' OR '.join(['content LIKE ?' for _ in words])
+            try:
+                cursor_doc.execute(f'SELECT content FROM documents WHERE {placeholders} LIMIT 3',
+                                   [f'%{word}%' for word in words])
+                docs = cursor_doc.fetchall()
+                if docs:
+                    doc_context = "Релевантные инструкции:\n" + "\n".join([d["content"][:500] for d in docs])
+            except:
+                pass
+            conn_doc.close()
+
+        # Получаем текущие данные с датчиков
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute('SELECT temperature, humidity, hit_count, hits_per_minute FROM sensor_data ORDER BY timestamp DESC LIMIT 1')
         row = cursor.fetchone()
         conn.close()
-        
+
         context = ""
         if row:
             temperature = row["temperature"] or 0.0
             humidity = row["humidity"] or 0.0
             hits_per_minute = row["hits_per_minute"] or 0.0
-            
+
             context = f"""Текущие показатели промышленного оборудования:
 - Температура: {temperature:.1f}°C
 - Влажность: {humidity:.1f}%
@@ -501,7 +550,11 @@ async def ai_chat(request: ChatRequest, username: str = Depends(verify_token)):
 - Вибрации: 0-30 уд/мин
 
 Ты - AI ассистент для промышленного мониторинга. Отвечай кратко, профессионально и давай практические рекомендации."""
-        
+
+        # Добавляем контекст из документов
+        if doc_context:
+            context += "\n\n" + doc_context
+
         if OLLAMA_AVAILABLE:
             ai_response = get_ollama_response(user_message, context)
         else:
@@ -516,16 +569,16 @@ async def ai_chat(request: ChatRequest, username: str = Depends(verify_token)):
 
 **Последние данные:**
 {context if context else "Нет данных с датчиков"}"""
-        
+
         await add_ai_recommendation({
             "timestamp": datetime.now().isoformat(),
             "message": f"💬 {username}: {user_message}\n🤖 AI: {ai_response}",
             "type": "chat",
             "parameters": json.dumps({"user_message": user_message, "response": ai_response, "username": username})
         })
-        
+
         return {"status": "success", "response": ai_response}
-        
+
     except Exception as e:
         print(f"❌ Ошибка AI чата: {e}")
         return {"status": "error", "message": str(e)}
@@ -559,7 +612,7 @@ async def get_ai_recommendations(limit: int = Query(10, ge=1, le=100), username:
         ''', (limit,))
         rows = cursor.fetchall()
         conn.close()
-        
+
         recommendations = []
         for row in rows:
             recommendations.append({
@@ -569,7 +622,7 @@ async def get_ai_recommendations(limit: int = Query(10, ge=1, le=100), username:
                 "type": row["type"],
                 "parameters": json.loads(row["parameters"]) if row["parameters"] else {}
             })
-        
+
         return {"status": "success", "recommendations": recommendations}
     except Exception as e:
         print(f"❌ Ошибка получения рекомендаций: {e}")
@@ -584,7 +637,7 @@ async def get_current_data(username: str = Depends(verify_token)):
     cursor.execute('SELECT * FROM sensor_data ORDER BY timestamp DESC LIMIT 1')
     row = cursor.fetchone()
     conn.close()
-    
+
     if row:
         return {
             "timestamp": row["timestamp"],
@@ -610,7 +663,7 @@ async def get_history(hours: int = Query(1, ge=1, le=24), username: str = Depend
         ''', (f'-{hours} hours',))
         rows = cursor.fetchall()
         conn.close()
-        
+
         history = []
         for row in rows:
             history.append({
@@ -620,7 +673,7 @@ async def get_history(hours: int = Query(1, ge=1, le=24), username: str = Depend
                 "hit_count": row["hit_count"] or 0,
                 "hits_per_minute": row["hits_per_minute"] or 0.0
             })
-        
+
         return history
     except Exception as e:
         print(f"❌ Ошибка получения истории: {e}")
@@ -636,10 +689,10 @@ async def websocket_endpoint(websocket: WebSocket):
             "message": "✅ Подключено к серверу мониторинга",
             "timestamp": datetime.now().isoformat()
         }))
-        
+
         while True:
             await websocket.receive_text()
-                
+
     except WebSocketDisconnect:
         manager.disconnect(websocket)
         print("🔌 WebSocket отключен")
@@ -654,33 +707,33 @@ async def save_settings(request: SettingsRequest, username: str = Depends(verify
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        
+
         cursor.execute('INSERT OR REPLACE INTO settings (parameter, value) VALUES (?, ?)', 
                       ('temperature_min', request.temperature.get('min', '20')))
         cursor.execute('INSERT OR REPLACE INTO settings (parameter, value) VALUES (?, ?)', 
                       ('temperature_max', request.temperature.get('max', '75')))
         cursor.execute('INSERT OR REPLACE INTO settings (parameter, value) VALUES (?, ?)', 
                       ('temperature_critical', request.temperature.get('critical', '80')))
-        
+
         cursor.execute('INSERT OR REPLACE INTO settings (parameter, value) VALUES (?, ?)', 
                       ('pressure_min', request.pressure.get('min', '5')))
         cursor.execute('INSERT OR REPLACE INTO settings (parameter, value) VALUES (?, ?)', 
                       ('pressure_max', request.pressure.get('max', '10')))
         cursor.execute('INSERT OR REPLACE INTO settings (parameter, value) VALUES (?, ?)', 
                       ('pressure_critical', request.pressure.get('critical', '12')))
-        
+
         cursor.execute('INSERT OR REPLACE INTO settings (parameter, value) VALUES (?, ?)', 
                       ('vibration_min', request.vibration.get('min', '0')))
         cursor.execute('INSERT OR REPLACE INTO settings (parameter, value) VALUES (?, ?)', 
                       ('vibration_max', request.vibration.get('max', '6')))
         cursor.execute('INSERT OR REPLACE INTO settings (parameter, value) VALUES (?, ?)', 
                       ('vibration_critical', request.vibration.get('critical', '8')))
-        
+
         conn.commit()
         conn.close()
-        
+
         return {"status": "success", "message": "Настройки успешно сохранены"}
-        
+
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
@@ -693,11 +746,11 @@ async def get_settings(username: str = Depends(verify_token)):
         cursor.execute('SELECT parameter, value FROM settings')
         rows = cursor.fetchall()
         conn.close()
-        
+
         settings = {}
         for row in rows:
             settings[row["parameter"]] = row["value"]
-        
+
         return {"status": "success", "settings": settings}
     except Exception as e:
         return {"status": "error", "message": str(e)}
@@ -710,18 +763,18 @@ async def save_profile(request: ProfileRequest, username: str = Depends(verify_t
         cursor = conn.cursor()
         cursor.execute('SELECT id FROM users WHERE username = ?', (username,))
         user = cursor.fetchone()
-        
+
         if user:
             cursor.execute('''
                 UPDATE profiles SET 
                 full_name=?, email=?, phone=?, department=?, position=?
                 WHERE user_id=?
             ''', (request.fullName, request.email, request.phone, request.department, request.position, user["id"]))
-            
+
             cursor.execute('UPDATE users SET full_name=? WHERE id=?', (request.fullName, user["id"]))
-            
+
             conn.commit()
-        
+
         conn.close()
         return {"status": "success", "message": "Профиль успешно сохранен"}
     except Exception as e:
@@ -741,7 +794,7 @@ async def get_profile(username: str = Depends(verify_token)):
         ''', (username,))
         row = cursor.fetchone()
         conn.close()
-        
+
         if row:
             return {
                 "status": "success",
@@ -758,7 +811,7 @@ async def get_profile(username: str = Depends(verify_token)):
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
-# ---------- Загрузка файлов ----------
+# ---------- Загрузка CSV файлов ----------
 @app.post("/api/upload")
 async def upload_file(file: UploadFile = File(...), username: str = Depends(verify_token)):
     """Загрузка CSV файла"""
@@ -767,11 +820,11 @@ async def upload_file(file: UploadFile = File(...), username: str = Depends(veri
         csv_text = contents.decode('utf-8')
         csv_reader = csv.reader(StringIO(csv_text))
         rows = list(csv_reader)
-        
+
         conn = get_db_connection()
         cursor = conn.cursor()
         imported_count = 0
-        
+
         for row in rows[1:]:
             if len(row) >= 5:
                 try:
@@ -782,12 +835,181 @@ async def upload_file(file: UploadFile = File(...), username: str = Depends(veri
                     imported_count += 1
                 except:
                     continue
-        
+
         conn.commit()
         conn.close()
         return {"status": "success", "message": f"Загружено {imported_count} строк"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+# ---------- Документы AI (загрузка инструкций) ----------
+@app.post("/api/documents/upload")
+async def upload_document(file: UploadFile = File(...), username: str = Depends(verify_token)):
+    """Загрузка документа (TXT или PDF) в базу знаний AI"""
+    content = ""
+    filename = file.filename
+    if filename.endswith('.txt'):
+        content = (await file.read()).decode('utf-8')
+    elif filename.endswith('.pdf'):
+        if not PDF_SUPPORT:
+            raise HTTPException(status_code=400, detail="PDF не поддерживается. Установите PyPDF2.")
+        pdf_bytes = await file.read()
+        reader = PdfReader(BytesIO(pdf_bytes))
+        for page in reader.pages:
+            page_text = page.extract_text()
+            if page_text:
+                content += page_text + "\n"
+    else:
+        raise HTTPException(status_code=400, detail="Поддерживаются только TXT и PDF файлы")
+
+    if not content.strip():
+        raise HTTPException(status_code=400, detail="Не удалось извлечь текст из файла")
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('INSERT INTO documents (filename, content) VALUES (?, ?)', (filename, content))
+    conn.commit()
+    conn.close()
+    return {"status": "success", "message": f"Документ '{filename}' загружен"}
+
+@app.get("/api/documents")
+async def list_documents(username: str = Depends(verify_token)):
+    """Список загруженных документов"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT id, filename, created_at FROM documents ORDER BY created_at DESC')
+    docs = [{"id": row["id"], "filename": row["filename"], "created_at": row["created_at"]} for row in cursor.fetchall()]
+    conn.close()
+    return {"status": "success", "documents": docs}
+
+@app.delete("/api/documents/{doc_id}")
+async def delete_document(doc_id: int, username: str = Depends(verify_token)):
+    """Удаление документа"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM documents WHERE id = ?', (doc_id,))
+    conn.commit()
+    conn.close()
+    return {"status": "success", "message": "Документ удалён"}
+
+# ---------- Экспорт данных (CSV, JSON, PDF) ----------
+@app.get("/api/export/data")
+async def export_data(format: str = Query("csv"),
+                      start_date: Optional[str] = Query(None),
+                      end_date: Optional[str] = Query(None),
+                      username: str = Depends(verify_token)):
+    """Экспорт данных в CSV или JSON"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    if start_date and end_date:
+        cursor.execute('SELECT * FROM sensor_data WHERE date(timestamp) BETWEEN ? AND ? ORDER BY timestamp ASC',
+                    (start_date, end_date))
+    else:
+        cursor.execute('SELECT * FROM sensor_data ORDER BY timestamp DESC LIMIT 100')
+    rows = cursor.fetchall()
+    conn.close()
+
+    if format == "csv":
+        output = StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["timestamp", "temperature", "humidity", "hits_per_minute", "hit_count"])
+        for row in rows:
+            writer.writerow([row["timestamp"], row["temperature"], row["humidity"],
+                             row["hits_per_minute"], row["hit_count"]])
+        return StreamingResponse(iter([output.getvalue()]), media_type="text/csv",
+                                 headers={"Content-Disposition": "attachment; filename=data.csv"})
+    elif format == "json":
+        data = [{"timestamp": row["timestamp"], "temperature": row["temperature"],
+                 "humidity": row["humidity"], "hits_per_minute": row["hits_per_minute"],
+                 "hit_count": row["hit_count"]} for row in rows]
+        return JSONResponse(content=data)
+    elif format == "excel":
+        return {"status": "error", "message": "Excel экспорт не реализован. Установите openpyxl."}
+    else:
+        raise HTTPException(status_code=400, detail="Неподдерживаемый формат")
+
+@app.get("/api/export/pdf")
+async def export_pdf(start_date: Optional[str] = Query(None),
+                     end_date: Optional[str] = Query(None),
+                     username: str = Depends(verify_token)):
+    """Экспорт данных в PDF отчёт"""
+    if not PDF_EXPORT_SUPPORT:
+        raise HTTPException(status_code=501, detail="PDF экспорт недоступен. Установите reportlab.")
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    if start_date and end_date:
+        cursor.execute('SELECT * FROM sensor_data WHERE date(timestamp) BETWEEN ? AND ? ORDER BY timestamp ASC',
+                    (start_date, end_date))
+    else:
+        cursor.execute('SELECT * FROM sensor_data ORDER BY timestamp DESC LIMIT 100')
+    rows = cursor.fetchall()
+    conn.close()
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4)
+    elements = []
+    styles = getSampleStyleSheet()
+    title_style = styles['Title']
+    heading_style = styles['Heading2']
+    normal_style = styles['Normal']
+
+    elements.append(Paragraph("Отчёт системы Пром Мониторинг", title_style))
+    elements.append(Spacer(1, 12))
+
+    if rows:
+        temps = [r["temperature"] for r in rows if r["temperature"] is not None]
+        hums = [r["humidity"] for r in rows if r["humidity"] is not None]
+        vibs = [r["hits_per_minute"] for r in rows if r["hits_per_minute"] is not None]
+        summary_data = [
+            ["Показатель", "Минимум", "Максимум", "Среднее"],
+            ["Температура (°C)", f"{min(temps):.1f}" if temps else "—",
+             f"{max(temps):.1f}" if temps else "—", f"{sum(temps)/len(temps):.1f}" if temps else "—"],
+            ["Влажность (%)", f"{min(hums):.1f}" if hums else "—",
+             f"{max(hums):.1f}" if hums else "—", f"{sum(hums)/len(hums):.1f}" if hums else "—"],
+            ["Вибрации (уд/мин)", f"{min(vibs):.1f}" if vibs else "—",
+             f"{max(vibs):.1f}" if vibs else "—", f"{sum(vibs)/len(vibs):.1f}" if vibs else "—"],
+        ]
+        t = Table(summary_data)
+        t.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.grey),
+            ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+            ('GRID', (0,0), (-1,-1), 1, colors.black),
+            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+            ('BOTTOMPADDING', (0,0), (-1,0), 12),
+        ]))
+        elements.append(Paragraph("Сводка", heading_style))
+        elements.append(t)
+        elements.append(Spacer(1, 12))
+
+        data = [["Время", "Температура", "Влажность", "Вибрации", "Удары"]]
+        for r in rows:
+            data.append([
+                r["timestamp"],
+                f"{r['temperature']:.1f}" if r["temperature"] is not None else "",
+                f"{r['humidity']:.1f}" if r["humidity"] is not None else "",
+                f"{r['hits_per_minute']:.1f}" if r["hits_per_minute"] is not None else "",
+                str(r["hit_count"]) if r["hit_count"] is not None else ""
+            ])
+        t2 = Table(data)
+        t2.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.grey),
+            ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+            ('GRID', (0,0), (-1,-1), 1, colors.black),
+            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0,0), (-1,-1), 8),
+        ]))
+        elements.append(Paragraph("Данные", heading_style))
+        elements.append(t2)
+    else:
+        elements.append(Paragraph("Нет данных за выбранный период.", normal_style))
+
+    doc.build(elements)
+    buffer.seek(0)
+    return StreamingResponse(buffer, media_type="application/pdf",
+                             headers={"Content-Disposition": "attachment; filename=report.pdf"})
 
 # ---------- Статус ----------
 @app.get("/api/status")
@@ -800,7 +1022,7 @@ async def get_status():
     cursor.execute('SELECT COUNT(*) FROM ai_recommendations')
     ai_count = cursor.fetchone()[0]
     conn.close()
-    
+
     return {
         "status": "running",
         "timestamp": datetime.now().isoformat(),

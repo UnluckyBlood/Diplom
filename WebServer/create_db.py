@@ -75,7 +75,16 @@ def create_new_database():
         )
     ''')
     print("  ✅ Таблица settings создана")
-    
+    # Таблица инструкций для Ollama
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS ollama_documents (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT,
+            content TEXT,
+            uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
     # Таблица профилей
     cursor.execute('''
         CREATE TABLE profiles (

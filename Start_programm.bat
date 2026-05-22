@@ -1,7 +1,15 @@
 @echo off
 cd /d "%~dp0"
-:: Используем -w 0 для указания последнего активного окна
-wt -w 0 ollama serve ; python DataProcessor\main.py ; python WebServer\webserver.py
+
+:: Запуск Ollama в фоне
+start "Ollama" ollama serve
+
+:: DataProcessor (если ему нужны библиотеки из venv – аналогично)
+start "DataProcessor" openwebui-venv\Scripts\python.exe DataProcessor\main.py
+
+:: WebServer – используем python из venv напрямую
+start "WebServer" openwebui-venv\Scripts\python.exe WebServer\webserver.py
+
 timeout /t 5 >nul
 start http://localhost:8000
 exit
